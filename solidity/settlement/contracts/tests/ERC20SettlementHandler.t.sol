@@ -183,6 +183,7 @@ contract ERC20SettlementHandler is BaseSettlementHandler, ISettlementHandler {
                 from_chain,
                 from_address,
                 from_handler,
+                address(this),
                 keccak256(payload)
             )
         );
@@ -207,7 +208,7 @@ contract ERC20SettlementHandler is BaseSettlementHandler, ISettlementHandler {
             if (method == ERC20Method.Transfer) {
                 // Decode transfer payload
                 ERC20TransferPayload memory transfer_payload = codec
-                    .deocde_transfer(payload);
+                    .deocde_transfer(erc20_payload);
 
                 if (no_burn) {
                     require(
