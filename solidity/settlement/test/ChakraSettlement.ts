@@ -7,571 +7,273 @@ import hre from "hardhat";
 import { Contract } from "ethers";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-describe("ExtendERC20", function () {
+describe("ChakraSettlement", function () {
     const chainId = 1;
+    const chainName = "test"
     const requiredValidators = 2;
-    const ckrBTCDecimals = 8;
+    const decimals = 8;
+    const name = "MyToken"
+    const symbol = "MKT"
+    const noBurn = false;
 
     async function deploySettlementFixture() {
-        const [deployer, settlementOwner, settlementManager, settlementDepositer, extendERC20Owner, tokenOwner, tokenMinter, tokenBuner] = await hre.ethers.getSigners();
-        const ChakraBTC = await hre.ethers.getContractFactory("ChakraBTC");
-        const chakraBTCInstance = await hre.upgrades.deployProxy(ChakraBTC, [await tokenOwner.getAddress(), ckrBTCDecimals]);
+        const [
+            tokenOwner,
+            tokenOperator,
+            manager,
+            settlementOwner,
+            settlementHnadlerOwner,
+        ] = await hre.ethers.getSigners();
+        const MyToken = await hre.ethers.getContractFactory("MyToken");
+        const tokenInstance = await hre.upgrades.deployProxy(MyToken, [
+            await tokenOwner.getAddress(),
+            await tokenOperator.getAddress(),
+            name,
+            symbol,
+            decimals
+        ]);
 
-        const ExtendERC20 = await hre.ethers.getContractFactory("ExtendERC20");
-        const extendERC20Instance = await hre.upgrades.deployProxy(ExtendERC20, [await extendERC20Owner.getAddress(), await tokenMinter.getAddress(), await tokenOwner.getAddress(), await chakraBTCInstance.getAddress()]);
+        const SettlementSignatureVerifier = await hre.ethers.getContractFactory("SettlementSignatureVerifier");
+        const verifierInstance = await hre.upgrades.deployProxy(SettlementSignatureVerifier, [
+            await settlementOwner.getAddress(),
+            requiredValidators
+        ]);
 
 
-        const Settlement = await hre.ethers.getContractFactory("ChakraSettlement");
-        const settlmentInstance = await hre.upgrades.deployProxy(Settlement, [await settlementOwner.getAddress(), [await settlementManager.getAddress()], [await settlementDepositer.getAddress()], BigInt(chainId), await extendERC20Instance.getAddress(), BigInt(requiredValidators)]);
-        return { chakraBTCInstance, extendERC20Instance, settlmentInstance, deployer, extendERC20Owner, settlementOwner, settlementDepositer, settlementManager, tokenOwner, tokenMinter, tokenBuner }
-    }
-
-    async function sendDepositRequest(btcTxId: BigInt, amount: number, settlmentInstance: Contract, settlementDepositer: HardhatEthersSigner) {
-        const [sender, receiver] = await hre.ethers.getSigners();
-        const toChainId = 2;
-        const fromChainName = ""
-        const toChainName = ""
-
-        await settlmentInstance.connect(settlementDepositer).deposit_request(
-            btcTxId,
+        const ChakraSettlement = await hre.ethers.getContractFactory("ChakraSettlement");
+        const settlmentInstance = await hre.upgrades.deployProxy(ChakraSettlement, [
+            chainName,
             BigInt(chainId),
-            BigInt(toChainId),
-            fromChainName,
-            toChainName,
-            await sender.getAddress(),
-            await receiver.getAddress(),
-            amount
-        );
+            await settlementOwner.getAddress(),
+            [await manager.getAddress()],
+            BigInt(requiredValidators),
+            await verifierInstance.getAddress(),
+        ]);
 
-        return { sender, receiver }
+        const ERC20CodecV1 = await hre.ethers.getContractFactory('ERC20CodecV1');
+        const codecInstance = await hre.upgrades.deployProxy(ERC20CodecV1, [
+            await settlementHnadlerOwner.getAddress(),
+        ])
+        const ERC20SettlementHandler = await hre.ethers.getContractFactory('ERC20SettlementHandler');
+        const settlementHandlerInstance = await hre.upgrades.deployProxy(ERC20SettlementHandler, [
+            await settlementHnadlerOwner.getAddress(), // owner
+            noBurn, // no_burn
+            chainName, //chain
+            await tokenInstance.getAddress(), // token
+            await codecInstance.getAddress(), // codec
+            await verifierInstance.getAddress(), // verifier
+            await settlmentInstance.getAddress(), // settlement
 
+        ])
+
+        const MessageLibTest = await hre.ethers.getContractFactory('MessageLibTest')
+        const messageLibTestInstance = await MessageLibTest.deploy()
+
+        // Approval operator role
+        await tokenInstance.connect(tokenOwner).add_operator(await settlementHandlerInstance.getAddress())
+
+        return { tokenInstance, codecInstance, settlmentInstance, settlementHandlerInstance, verifierInstance, messageLibTestInstance, tokenOwner, tokenOperator, manager, settlementOwner, settlementHnadlerOwner }
     }
 
-    it("Chakra settlement should managed validators correctly", async function () {
+    it("Should managed validators correctly", async function () {
         const [validator1, validator2, validator3] = await hre.ethers.getSigners();
-        const { settlmentInstance, settlementManager } = await loadFixture(deploySettlementFixture)
+        const { settlmentInstance, verifierInstance, manager, settlementOwner } = await loadFixture(deploySettlementFixture)
+
+        // Add the settlement contract as a manager
+        await verifierInstance.connect(settlementOwner).add_manager(await settlmentInstance.getAddress());
 
 
         const validators = [validator1, validator2, validator3]
 
         // Check that the validators are correctly added
         for (let i = 0; i < validators.length; i++) {
-            await settlmentInstance.connect(settlementManager).add_validator(await validators[i].getAddress());
+            await settlmentInstance.connect(manager).add_validator(await validators[i].getAddress());
             expect(await settlmentInstance.is_validator(await validators[i].getAddress())).to.equal(true);
+            expect(await verifierInstance.is_validator(await validators[i].getAddress())).to.equal(true);
         }
 
         // Check that the validators added but not allow added again
         for (let i = 0; i < validators.length; i++) {
-            await expect(settlmentInstance.connect(settlementManager).add_validator(await validators[i].getAddress()))
+            await expect(settlmentInstance.connect(manager).add_validator(await validators[i].getAddress()))
                 .to.be.revertedWith("Validator already exists")
         }
 
 
         // Check that the validators are correctly removed
         for (let i = 0; i < validators.length; i++) {
-            await settlmentInstance.connect(settlementManager).remove_validator(await validators[i].getAddress());
+            await settlmentInstance.connect(manager).remove_validator(await validators[i].getAddress());
             expect(await settlmentInstance.is_validator(await validators[i].getAddress())).to.equal(false);
+            expect(await verifierInstance.is_validator(await validators[i].getAddress())).to.equal(false);
         }
 
         // Check that the validators removed but not allow removed again
         for (let i = 0; i < validators.length; i++) {
-            await expect(settlmentInstance.connect(settlementManager).remove_validator(await validators[i].getAddress()))
+            await expect(settlmentInstance.connect(manager).remove_validator(await validators[i].getAddress()))
                 .to.be.revertedWith("Validator does not exists")
         }
     });
 
-    it("Chakra settlement should deposit request successful", async function () {
-        const [sender, receiver] = await hre.ethers.getSigners();
-        const { settlmentInstance, settlementDepositer } = await loadFixture(deploySettlementFixture)
+    it("Should send cross chain message", async function () {
+        const [sender, receiver, fromHandler] = await hre.ethers.getSigners();
+        const { tokenInstance, settlmentInstance, settlementHandlerInstance, codecInstance, verifierInstance, messageLibTestInstance, manager, settlementOwner } = await loadFixture(deploySettlementFixture)
 
-        const btcTxId = hre.ethers.toBigInt(Buffer.from("7b09bfd0070ec50ba95640fcf078907a8ea1fd109e4979abbd073a34b2c2787e", 'hex'))
-        const toChainId = 2;
-        const fromChainName = ""
-        const toChainName = ""
-        const amount = 500
-
-        const senderAddress = await sender.getAddress();
-        const receiverAddress = await receiver.getAddress();
-        const depositRequestTx = await settlmentInstance.connect(settlementDepositer).deposit_request(
-            btcTxId,
-            BigInt(chainId),
-            BigInt(toChainId),
-            fromChainName,
-            toChainName,
+        const senderAddress = await sender.getAddress()
+        const receiverAddress = await receiver.getAddress()
+        const receiverAddressU256 = hre.ethers.toBigInt(Buffer.from(receiverAddress.slice(2), 'hex'))
+        const settlementHandlerAddress = await settlementHandlerInstance.getAddress()
+        const settlementHandlerAddressU256 = hre.ethers.toBigInt(Buffer.from(settlementHandlerAddress.slice(2), 'hex'))
+        const msgId = 1
+        const amount = 1000
+        const toChain = "Starknet"
+        const payloadString = await messageLibTestInstance.encode_erc20_settlement_message(
+            msgId,
             senderAddress,
-            receiverAddress,
+            await codecInstance.getAddress(),
+            await tokenInstance.getAddress(),
+            await tokenInstance.getAddress(),
+            receiverAddressU256,
             amount
-        );
+        )
+        const payload = Buffer.from(payloadString.slice(2), 'hex')
 
-        // Check that event is emitted
-        await expect(depositRequestTx)
-            .to.emit(settlmentInstance, 'DepositRequest')
-            .withArgs(btcTxId,
+        const tx = await settlmentInstance.connect(fromHandler).send_cross_chain_msg(
+            toChain,
+            senderAddress,
+            settlementHandlerAddressU256, // to handler
+            5, // ERC20
+            payload
+        )
+
+
+        const txid = hre.ethers.solidityPackedKeccak256(
+            ["string", "string", "address", "address", "uint256", "uint256", "uint8", "bytes"],
+            [
+                chainName,
+                toChain,
                 senderAddress,
-                receiverAddress,
-                amount,
-                chainId,
-                toChainId,
-                fromChainName,
-                toChainName
-            );
+                await fromHandler.getAddress(),
+                settlementHandlerAddressU256,
+                1,
+                5,
+                payload
+            ]
+        )
 
-        // Check that status should equals pending
-        expect(await settlmentInstance.get_transaction_status(btcTxId)).to.be.equal(1);
+        const txidU256 = hre.ethers.toBigInt(Buffer.from(txid.slice(2), 'hex'))
 
-        // bad request should revert
-        await expect(
-            settlmentInstance.connect(settlementDepositer).deposit_request(
-                btcTxId,
-                BigInt(chainId),
-                BigInt(toChainId),
-                fromChainName,
-                toChainName,
-                await sender.getAddress(),
-                await receiver.getAddress(),
-                amount
-            )
-        ).to.be.revertedWith("Deposit request already exists");
-    });
-
-    it("Chakra settlement deposit request should revert due bad role", async function () {
-        const [sender, receiver] = await hre.ethers.getSigners();
-        const { settlmentInstance, settlementDepositer } = await loadFixture(deploySettlementFixture)
-
-        const btcTxId = hre.ethers.toBigInt(Buffer.from("7b09bfd0070ec50ba95640fcf078907a8ea1fd109e4979abbd073a34b2c2787e", 'hex'))
-        const toChainId = 2;
-        const fromChainName = ""
-        const toChainName = ""
-        const amount = 500
-
-        const senderAddress = await sender.getAddress();
-        const receiverAddress = await receiver.getAddress();
-
-        await expect(
-            settlmentInstance.connect(sender).deposit_request(
-                btcTxId,
-                BigInt(chainId),
-                BigInt(toChainId),
-                fromChainName,
-                toChainName,
+        await expect(tx).emit(settlmentInstance, 'CrossChainMsg')
+            .withArgs(
+                txidU256,
                 senderAddress,
-                receiverAddress,
-                amount
+                chainName,
+                toChain,
+                await fromHandler.getAddress(),
+                settlementHandlerAddressU256,
+                5,
+                payload
             )
-        ).to.be.revertedWithCustomError(settlmentInstance, "AccessControlUnauthorizedAccount");
-    });
-    // it("Should deposited", async function () {
-    //     const [sender, receiver] = await hre.ethers.getSigners();
-    //     const { settlmentInstance, settlementDepositer } = await loadFixture(deploySettlementFixture)
+    })
 
-    //     const toChainId = 2;
-    //     const fromChainName = ""
-    //     const toChainName = ""
-    //     const btcTxId = Buffer.from("0xffffffff")
-    //     const amount = 500
+    it("Should receive cross chain message", async function () {
+        const [sender, receiver, fromHandler, validator1, validator2, validator3] = await hre.ethers.getSigners();
+        const { tokenInstance, settlmentInstance, settlementHandlerInstance, codecInstance, verifierInstance, messageLibTestInstance, manager, settlementOwner, settlementHnadlerOwner } = await loadFixture(deploySettlementFixture)
 
-    //     const depositRequestTx = await settlmentInstance.connect(settlementDepositer).deposit_request(
-    //         BigInt(chainId),
-    //         BigInt(toChainId),
-    //         fromChainName,
-    //         toChainName,
-    //         await sender.getAddress(),
-    //         await receiver.getAddress(),
-    //         amount,
-    //         btcTxId
-    //     );
 
-    //     const depositReqeustTxRecipet = await depositRequestTx.wait();
-    //     const depositReqeustTxId = depositReqeustTxRecipet.logs[0].args[0];
+        const senderAddress = await sender.getAddress()
+        const senderAddressU256 = hre.ethers.toBigInt(Buffer.from(senderAddress.slice(2), 'hex'))
+        const receiverAddress = await receiver.getAddress()
+        const receiverAddressU256 = hre.ethers.toBigInt(Buffer.from(receiverAddress.slice(2), 'hex'))
+        const settlementHandlerAddress = await settlementHandlerInstance.getAddress()
+        const settlementHandlerAddressU256 = hre.ethers.toBigInt(Buffer.from(settlementHandlerAddress.slice(2), 'hex'))
+        const fromHandlerAddress = await fromHandler.getAddress();
+        const fromHandlerAddressU256 = hre.ethers.toBigInt(Buffer.from(fromHandlerAddress.slice(2), 'hex'))
 
-    //     const depositedTx = settlmentInstance.connect(settlementDepositer).deposited(
-    //         depositReqeustTxId,
-    //         BigInt(chainId),
-    //         BigInt(toChainId),
-    //         fromChainName,
-    //         toChainName,
-    //         btcTxId
-    //     )
-    //     const depositedRecipet = await depositRequestTx.wait();
-    //     const depositedTxId = depositedRecipet.logs[0].args[0];
-
-    //     await expect(depositedTx)
-    //         .to.emit(settlmentInstance, 'Deposited')
-    //         .withArgs(depositedTxId, await sender.getAddress(), await receiver.getAddress(), amount, chainId, toChainId, fromChainName, toChainName, btcTxId);
-    // });
-
-    // it("Should deposited with validator role", async function () {
-    //     const [sender, receiver, validator] = await hre.ethers.getSigners();
-    //     const { settlmentInstance, settlementManager, settlementDepositer } = await loadFixture(deploySettlementFixture)
-
-    //     const toChainId = 2;
-    //     const fromChainName = ""
-    //     const toChainName = ""
-    //     const btcTxId = Buffer.from("0xffffffff")
-    //     const amount = 500
-
-    //     await settlmentInstance.connect(settlementManager).add_validator(await validator.getAddress());
-
-    //     const depositRequestTx = await settlmentInstance.connect(settlementDepositer).deposit_request(
-    //         BigInt(chainId),
-    //         BigInt(toChainId),
-    //         fromChainName,
-    //         toChainName,
-    //         await sender.getAddress(),
-    //         await receiver.getAddress(),
-    //         amount,
-    //         btcTxId
-    //     );
-
-    //     const depositReqeustTxRecipet = await depositRequestTx.wait();
-    //     const depositReqeustTxId = depositReqeustTxRecipet.logs[0].args[0];
-
-    //     const depositedTx = settlmentInstance.connect(validator).deposited(
-    //         depositReqeustTxId,
-    //         BigInt(chainId),
-    //         BigInt(toChainId),
-    //         fromChainName,
-    //         toChainName,
-    //         btcTxId
-    //     )
-    //     const depositedRecipet = await depositRequestTx.wait();
-    //     const depositedTxId = depositedRecipet.logs[0].args[0];
-
-    //     await expect(depositedTx)
-    //         .to.emit(settlmentInstance, 'Deposited')
-    //         .withArgs(depositedTxId, await sender.getAddress(), await receiver.getAddress(), amount, chainId, toChainId, fromChainName, toChainName, btcTxId);
-    // });
-
-    // it("Should deposited revert due bad role", async function () {
-    //     const [sender, receiver] = await hre.ethers.getSigners();
-    //     const { settlmentInstance, settlementDepositer } = await loadFixture(deploySettlementFixture)
-
-    //     const toChainId = 2;
-    //     const fromChainName = ""
-    //     const toChainName = ""
-    //     const btcTxId = Buffer.from("0xffffffff")
-    //     const amount = 500
-
-    //     const depositRequestTx = await settlmentInstance.connect(settlementDepositer).deposit_request(
-    //         BigInt(chainId),
-    //         BigInt(toChainId),
-    //         fromChainName,
-    //         toChainName,
-    //         await sender.getAddress(),
-    //         await receiver.getAddress(),
-    //         amount,
-    //         btcTxId
-    //     );
-
-    //     const depositReqeustTxRecipet = await depositRequestTx.wait();
-    //     const depositReqeustTxId = depositReqeustTxRecipet.logs[0].args[0];
-
-    //     // The deposited method only validator or DEPOSITER_ROLEs can be called.
-    //     await expect(
-    //         settlmentInstance.connect(sender).deposited(
-    //             depositReqeustTxId,
-    //             BigInt(chainId),
-    //             BigInt(toChainId),
-    //             fromChainName,
-    //             toChainName,
-    //             btcTxId
-    //         )
-    //     ).to.be.revertedWith("Invalid role");
-    // });
-
-    it("Chakra settlement should minted", async function () {
-        const [validator1, validator2, validator3] = await hre.ethers.getSigners();
-        const { extendERC20Instance, settlmentInstance, settlementDepositer, extendERC20Owner, settlementManager } = await loadFixture(deploySettlementFixture)
-
+        const msgId = 1
         const amount = 1000
-        const btcTxId = hre.ethers.toBigInt(Buffer.from("7b09bfd0070ec50ba95640fcf078907a8ea1fd109e4979abbd073a34b2c2787e", 'hex'))
+        const toChain = "Starknet"
 
-        const { receiver } = await sendDepositRequest(
-            btcTxId,
-            amount,
-            settlmentInstance,
-            settlementDepositer
-        )
+        // Add the settlement contract as a manager
+        await verifierInstance.connect(settlementOwner).add_manager(await settlmentInstance.getAddress());
 
-        await extendERC20Instance.connect(extendERC20Owner).add_owner(await settlmentInstance.getAddress());
-        await settlmentInstance.connect(settlementManager).add_validator(await validator1.getAddress());
-        await settlmentInstance.connect(settlementManager).add_validator(await validator2.getAddress());
-        await settlmentInstance.connect(settlementManager).add_validator(await validator3.getAddress());
-
-        const receiverAddress = await receiver.getAddress();
-        const otherChainId = 2;
-        const fromChainName = ""
-        const toChainName = ""
-
-        const tx1 = await settlmentInstance.connect(validator1).pre_mint(
-            btcTxId,
-            BigInt(chainId),
-            BigInt(otherChainId),
-            fromChainName,
-            toChainName,
-            receiverAddress,
-            amount,
+        // Add from handler to receive handler whitelist
+        await settlementHandlerInstance.connect(settlementHnadlerOwner).add_handler(
+            chainName,
+            fromHandlerAddressU256
         );
 
-        await expect(tx1)
-            .to.emit(settlmentInstance, 'PreMint')
-            .withArgs(
-                btcTxId,
-                receiverAddress,
-                amount,
-                chainId,
-                otherChainId,
-                fromChainName,
-                toChainName,
-                validator1.address
-            );
+        // Make erc20 message payload
+        const payloadString = await messageLibTestInstance.encode_erc20_settlement_message(
+            hre.ethers.toBigInt(msgId),
+            senderAddress,
+            await codecInstance.getAddress(),
+            await tokenInstance.getAddress(),
+            await tokenInstance.getAddress(),
+            receiverAddressU256,
+            hre.ethers.toBigInt(amount)
+        )
+        const payload = Buffer.from(payloadString.slice(2), 'hex')
+        const payloadKeccak256Bytes = Buffer.from(hre.ethers.keccak256(payload).slice(2), 'hex')
+        await settlmentInstance.connect(fromHandler).send_cross_chain_msg(
+            toChain,
+            senderAddress,
+            settlementHandlerAddressU256, // to handler
+            5, // ERC20
+            payload
+        )
 
 
-        const tx2 = await settlmentInstance.connect(validator2).pre_mint(
-            btcTxId,
-            BigInt(chainId),
-            BigInt(otherChainId),
-            fromChainName,
-            toChainName,
-            await receiver.getAddress(),
-            amount,
+        const txid = hre.ethers.solidityPackedKeccak256(
+            ["string", "string", "address", "address", "uint256", "uint256", "uint8", "bytes"],
+            [
+                chainName,
+                toChain,
+                senderAddress,
+                await fromHandler.getAddress(),
+                settlementHandlerAddressU256,
+                1,
+                5,
+                payload
+            ]
+        )
+
+        const txidU256 = hre.ethers.toBigInt(Buffer.from(txid.slice(2), 'hex'))
+
+
+        const validators = [validator1, validator2, validator3]
+        for (let i = 0; i < validators.length; i++) {
+            await settlmentInstance.connect(manager).add_validator(await validators[i].getAddress());
+        }
+
+        // Make multisignature
+        const messageHash = hre.ethers.solidityPackedKeccak256(
+            ["uint256", "string", "uint256", "uint256", "address", "bytes32"],
+            [
+                txid,
+                chainName,
+                senderAddressU256,
+                fromHandlerAddressU256,
+                settlementHandlerAddress,
+                payloadKeccak256Bytes
+            ])
+        let signatures = Buffer.from([]);
+        for (let i = 0; i < validators.length - 1; i++) {
+            const signature = await validators[i].signMessage(hre.ethers.getBytes(messageHash));
+            const signatureBytes = Buffer.from(signature.slice(2), 'hex');
+            signatures = Buffer.concat([signatures, signatureBytes]);
+        }
+
+        await settlmentInstance.connect(validator1).receive_cross_chain_msg(
+            txidU256,
+            chainName,
+            senderAddressU256,
+            fromHandlerAddressU256,
+            settlementHandlerAddress,
+            5,
+            payload,
+            0,
+            signatures
         );
 
-        await expect(tx2)
-            .to.emit(settlmentInstance, 'Minted')
-            .withArgs(
-                btcTxId,
-                receiverAddress,
-                amount,
-                chainId,
-                otherChainId,
-                fromChainName,
-                toChainName
-            );
-
-        expect(await extendERC20Instance.balanceOf(await receiver.getAddress())).to.equal(amount);
-    });
-
-
-    it("Chakra settlement should fail due to not exists transaction", async function () {
-        const [validator1, validator2, validator3] = await hre.ethers.getSigners();
-        const { extendERC20Instance, settlmentInstance, settlementDepositer, extendERC20Owner, settlementManager } = await loadFixture(deploySettlementFixture)
-
-        const amount = 1000
-        const btcTxId = hre.ethers.toBigInt(Buffer.from("7b09bfd0070ec50ba95640fcf078907a8ea1fd109e4979abbd073a34b2c2787e", 'hex'))
-
-        const { receiver } = await sendDepositRequest(
-            btcTxId,
-            amount,
-            settlmentInstance,
-            settlementDepositer
-        )
-
-        await extendERC20Instance.connect(extendERC20Owner).add_owner(await settlmentInstance.getAddress());
-        await settlmentInstance.connect(settlementManager).add_validator(await validator1.getAddress());
-        await settlmentInstance.connect(settlementManager).add_validator(await validator2.getAddress());
-        await settlmentInstance.connect(settlementManager).add_validator(await validator3.getAddress());
-
-        const receiverAddress = await receiver.getAddress();
-        const otherChainId = 2;
-        const fromChainName = ""
-        const toChainName = ""
-        const badBtcTxId = hre.ethers.toBigInt(Buffer.from("6c09bfd0070ec50ba95640fcf078907a8ea1fd109e4979abbd073a34b2c2787e", 'hex'))
-
-        await expect(settlmentInstance.connect(validator1).pre_mint(
-            badBtcTxId,
-            BigInt(chainId),
-            BigInt(otherChainId),
-            fromChainName,
-            toChainName,
-            receiverAddress,
-            amount,
-        )).to.be.revertedWith("Transaction does not exist");
-    });
-
-    it("Chakra settlement should fail due to undefined validator", async function () {
-        const [validator1, validator2, validator3, validator4] = await hre.ethers.getSigners();
-        const { extendERC20Instance, settlmentInstance, settlementDepositer, extendERC20Owner, settlementManager } = await loadFixture(deploySettlementFixture)
-
-        const amount = 1000
-        const btcTxId = hre.ethers.toBigInt(Buffer.from("7b09bfd0070ec50ba95640fcf078907a8ea1fd109e4979abbd073a34b2c2787e", 'hex'))
-
-        const { receiver } = await sendDepositRequest(
-            btcTxId,
-            amount,
-            settlmentInstance,
-            settlementDepositer
-        )
-
-        await extendERC20Instance.connect(extendERC20Owner).add_owner(await settlmentInstance.getAddress());
-        await settlmentInstance.connect(settlementManager).add_validator(await validator1.getAddress());
-        await settlmentInstance.connect(settlementManager).add_validator(await validator2.getAddress());
-        await settlmentInstance.connect(settlementManager).add_validator(await validator3.getAddress());
-
-        const receiverAddress = await receiver.getAddress();
-        const otherChainId = 2;
-        const fromChainName = ""
-        const toChainName = ""
-
-        await expect(settlmentInstance.connect(validator4).pre_mint(
-            btcTxId,
-            BigInt(chainId),
-            BigInt(otherChainId),
-            fromChainName,
-            toChainName,
-            receiverAddress,
-            amount,
-        )).to.be.rejectedWith("Not validator");
-    });
-
-    it("Chakra settlement should fail due to not unequal amounts", async function () {
-        const [validator1, validator2, validator3] = await hre.ethers.getSigners();
-        const { extendERC20Instance, settlmentInstance, settlementDepositer, extendERC20Owner, settlementManager } = await loadFixture(deploySettlementFixture)
-
-        // deposit_request 1000, but want mint 2000
-        const amount = 1000
-        const btcTxId = hre.ethers.toBigInt(Buffer.from("7b09bfd0070ec50ba95640fcf078907a8ea1fd109e4979abbd073a34b2c2787e", 'hex'))
-
-        const { receiver } = await sendDepositRequest(
-            btcTxId,
-            amount,
-            settlmentInstance,
-            settlementDepositer
-        )
-
-        await extendERC20Instance.connect(extendERC20Owner).add_owner(await settlmentInstance.getAddress());
-        await settlmentInstance.connect(settlementManager).add_validator(await validator1.getAddress());
-        await settlmentInstance.connect(settlementManager).add_validator(await validator2.getAddress());
-        await settlmentInstance.connect(settlementManager).add_validator(await validator3.getAddress());
-
-        const receiverAddress = await receiver.getAddress();
-        const otherChainId = 2;
-        const fromChainName = ""
-        const toChainName = ""
-
-        await expect(settlmentInstance.connect(validator1).pre_mint(
-            btcTxId,
-            BigInt(chainId),
-            BigInt(otherChainId),
-            fromChainName,
-            toChainName,
-            receiverAddress,
-            2000,
-        )).to.be.revertedWith("Invalid mint amount");
-    });
-
-    it("Chakra settlement should not remint", async function () {
-        const [validator1, validator2, validator3] = await hre.ethers.getSigners();
-        const { extendERC20Instance, settlmentInstance, settlementDepositer, extendERC20Owner, settlementManager } = await loadFixture(deploySettlementFixture)
-
-        // deposit_request 1000, but want mint 2000
-        const amount = 1000
-        const btcTxId = hre.ethers.toBigInt(Buffer.from("7b09bfd0070ec50ba95640fcf078907a8ea1fd109e4979abbd073a34b2c2787e", 'hex'))
-
-        const { receiver } = await sendDepositRequest(
-            btcTxId,
-            amount,
-            settlmentInstance,
-            settlementDepositer
-        )
-
-        await extendERC20Instance.connect(extendERC20Owner).add_owner(await settlmentInstance.getAddress());
-        await settlmentInstance.connect(settlementManager).add_validator(await validator1.getAddress());
-        await settlmentInstance.connect(settlementManager).add_validator(await validator2.getAddress());
-        await settlmentInstance.connect(settlementManager).add_validator(await validator3.getAddress());
-
-        const receiverAddress = await receiver.getAddress();
-        const otherChainId = 2;
-        const fromChainName = ""
-        const toChainName = ""
-
-        await settlmentInstance.connect(validator1).pre_mint(
-            btcTxId,
-            BigInt(chainId),
-            BigInt(otherChainId),
-            fromChainName,
-            toChainName,
-            receiverAddress,
-            amount,
-        );
-
-        const tx = await settlmentInstance.connect(validator2).pre_mint(
-            btcTxId,
-            BigInt(chainId),
-            BigInt(otherChainId),
-            fromChainName,
-            toChainName,
-            receiverAddress,
-            amount,
-        );
-
-        await expect(tx)
-            .to.emit(settlmentInstance, 'Minted')
-            .withArgs(
-                btcTxId,
-                receiverAddress,
-                amount,
-                chainId,
-                otherChainId,
-                fromChainName,
-                toChainName
-            );
-
-        await expect(settlmentInstance.connect(validator3).pre_mint(
-            btcTxId,
-            BigInt(chainId),
-            BigInt(otherChainId),
-            fromChainName,
-            toChainName,
-            receiverAddress,
-            amount,
-        )).to.be.revertedWith("Transaction already minted");
-    });
-
-    it("Chakra settlement should fail due to validator auth multiple times", async function () {
-        const [validator1, validator2, validator3] = await hre.ethers.getSigners();
-        const { extendERC20Instance, settlmentInstance, settlementDepositer, extendERC20Owner, settlementManager } = await loadFixture(deploySettlementFixture)
-
-        // deposit_request 1000, but want mint 2000
-        const amount = 1000
-        const btcTxId = hre.ethers.toBigInt(Buffer.from("7b09bfd0070ec50ba95640fcf078907a8ea1fd109e4979abbd073a34b2c2787e", 'hex'))
-
-        const { receiver } = await sendDepositRequest(
-            btcTxId,
-            amount,
-            settlmentInstance,
-            settlementDepositer
-        )
-
-        await extendERC20Instance.connect(extendERC20Owner).add_owner(await settlmentInstance.getAddress());
-        await settlmentInstance.connect(settlementManager).add_validator(await validator1.getAddress());
-        await settlmentInstance.connect(settlementManager).add_validator(await validator2.getAddress());
-        await settlmentInstance.connect(settlementManager).add_validator(await validator3.getAddress());
-
-        const receiverAddress = await receiver.getAddress();
-        const otherChainId = 2;
-        const fromChainName = ""
-        const toChainName = ""
-
-        await settlmentInstance.connect(validator1).pre_mint(
-            btcTxId,
-            BigInt(chainId),
-            BigInt(otherChainId),
-            fromChainName,
-            toChainName,
-            receiverAddress,
-            amount,
-        );
-
-        await expect(settlmentInstance.connect(validator1).pre_mint(
-            btcTxId,
-            BigInt(chainId),
-            BigInt(otherChainId),
-            fromChainName,
-            toChainName,
-            receiverAddress,
-            amount,
-        )).to.be.revertedWith("Validator already authed");
-    });
-
+        expect(await tokenInstance.balanceOf(receiverAddress)).to.be.equal(amount)
+    })
 });
