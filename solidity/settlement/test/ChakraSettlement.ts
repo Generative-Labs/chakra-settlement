@@ -75,6 +75,23 @@ describe("ChakraSettlement", function () {
         return { tokenInstance, codecInstance, settlmentInstance, settlementHandlerInstance, verifierInstance, messageLibTestInstance, tokenOwner, tokenOperator, manager, settlementOwner, settlementHnadlerOwner }
     }
 
+    it('Should upgrade to version 2', async () => {
+        const { settlmentInstance, settlementOwner } = await loadFixture(deploySettlementFixture);
+
+        console.log(await settlmentInstance.version())
+        expect(await settlmentInstance.version()).to.equal("0.1.0")
+
+        const instanceV2 = await hre.ethers.getContractFactory("ChakraSettlementUpgradeTest");
+
+        const upgraded = await hre.upgrades.upgradeProxy(await settlmentInstance.getAddress(), instanceV2.connect(settlementOwner));
+
+        const upgraded_owner = await upgraded.owner();
+        expect(upgraded_owner.toString()).to.equal(await settlementOwner.getAddress());
+
+        expect(await upgraded.version()).to.equal("0.1.1");
+    });
+
+
     it("Should managed validators correctly", async function () {
         const [validator1, validator2, validator3] = await hre.ethers.getSigners();
         const { settlmentInstance, verifierInstance, manager, settlementOwner } = await loadFixture(deploySettlementFixture)
@@ -275,5 +292,24 @@ describe("ChakraSettlement", function () {
         );
 
         expect(await tokenInstance.balanceOf(receiverAddress)).to.be.equal(amount)
+    })
+
+    it("Should management manager", async function () {
+        const [maanger] = await hre.ethers.getSigners();
+        const { tokenInstance, settlmentInstance, settlementHandlerInstance, codecInstance, verifierInstance, messageLibTestInstance, manager, settlementOwner } = await loadFixture(deploySettlementFixture)
+
+        const managerAddress = await manager.getAddress();
+
+        // Only owner can management manager
+        await expect(settlmentInstance.add_manager(managerAddress)).to.revertedWithCustomError(settlmentInstance, "OwnableUnauthorizedAccount")
+        await expect(settlmentInstance.remove_manager(managerAddress)).to.revertedWithCustomError(settlmentInstance, "OwnableUnauthorizedAccount")
+
+        // Add and remove manager after that manager state should correctly
+        await settlmentInstance.connect(settlementOwner).add_manager(managerAddress)
+        expect(await settlmentInstance.is_manager(managerAddress)).to.equal(true)
+
+        await settlmentInstance.connect(settlementOwner).remove_manager(managerAddress)
+        expect(await settlmentInstance.is_manager(managerAddress)).to.equal(false)
+
     })
 });
