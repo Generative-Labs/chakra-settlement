@@ -140,7 +140,7 @@ abstract contract BaseSettlement is
         return nonce_manager[account];
     }
 
-    function version() public pure returns (string memory) {
+    function version() public pure virtual returns (string memory) {
         return "0.1.0";
     }
 }
