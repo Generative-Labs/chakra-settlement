@@ -78,7 +78,6 @@ describe("ChakraSettlement", function () {
     it('Should upgrade to version 2', async () => {
         const { settlmentInstance, settlementOwner } = await loadFixture(deploySettlementFixture);
 
-        console.log(await settlmentInstance.version())
         expect(await settlmentInstance.version()).to.equal("0.1.0")
 
         const instanceV2 = await hre.ethers.getContractFactory("ChakraSettlementUpgradeTest");
@@ -91,6 +90,24 @@ describe("ChakraSettlement", function () {
         expect(await upgraded.version()).to.equal("0.1.1");
     });
 
+    it("Should management manager", async function () {
+        const [maanger] = await hre.ethers.getSigners();
+        const { tokenInstance, settlmentInstance, settlementHandlerInstance, codecInstance, verifierInstance, messageLibTestInstance, manager, settlementOwner } = await loadFixture(deploySettlementFixture)
+
+        const managerAddress = await manager.getAddress();
+
+        // Only owner can management manager
+        await expect(settlmentInstance.add_manager(managerAddress)).to.revertedWithCustomError(settlmentInstance, "OwnableUnauthorizedAccount")
+        await expect(settlmentInstance.remove_manager(managerAddress)).to.revertedWithCustomError(settlmentInstance, "OwnableUnauthorizedAccount")
+
+        // Add and remove manager after that manager state should correctly
+        await settlmentInstance.connect(settlementOwner).add_manager(managerAddress)
+        expect(await settlmentInstance.is_manager(managerAddress)).to.equal(true)
+
+        await settlmentInstance.connect(settlementOwner).remove_manager(managerAddress)
+        expect(await settlmentInstance.is_manager(managerAddress)).to.equal(false)
+
+    })
 
     it("Should managed validators correctly", async function () {
         const [validator1, validator2, validator3] = await hre.ethers.getSigners();
@@ -294,22 +311,185 @@ describe("ChakraSettlement", function () {
         expect(await tokenInstance.balanceOf(receiverAddress)).to.be.equal(amount)
     })
 
-    it("Should management manager", async function () {
-        const [maanger] = await hre.ethers.getSigners();
-        const { tokenInstance, settlmentInstance, settlementHandlerInstance, codecInstance, verifierInstance, messageLibTestInstance, manager, settlementOwner } = await loadFixture(deploySettlementFixture)
+    it("Should receive cross chain callback", async function () {
+        const [sender, receiver, fromHandler, toHandler, validator1, validator2, validator3] = await hre.ethers.getSigners();
+        const { tokenInstance, settlmentInstance, settlementHandlerInstance, codecInstance, verifierInstance, messageLibTestInstance, manager, tokenOperator, settlementOwner, settlementHnadlerOwner } = await loadFixture(deploySettlementFixture)
 
-        const managerAddress = await manager.getAddress();
 
-        // Only owner can management manager
-        await expect(settlmentInstance.add_manager(managerAddress)).to.revertedWithCustomError(settlmentInstance, "OwnableUnauthorizedAccount")
-        await expect(settlmentInstance.remove_manager(managerAddress)).to.revertedWithCustomError(settlmentInstance, "OwnableUnauthorizedAccount")
+        const toTokenAddress = await sender.getAddress()
+        const toTokenAddressU256 = hre.ethers.toBigInt(Buffer.from(toTokenAddress.slice(2), 'hex'))
+        const senderAddress = await sender.getAddress()
+        const senderAddressU256 = hre.ethers.toBigInt(Buffer.from(senderAddress.slice(2), 'hex'))
+        const receiverAddress = await receiver.getAddress()
+        const receiverAddressU256 = hre.ethers.toBigInt(Buffer.from(receiverAddress.slice(2), 'hex'))
+        const settlementHandlerAddress = await settlementHandlerInstance.getAddress()
+        const settlementHandlerAddressU256 = hre.ethers.toBigInt(Buffer.from(settlementHandlerAddress.slice(2), 'hex'))
+        const fromHandlerAddress = await fromHandler.getAddress();
+        const fromHandlerAddressU256 = hre.ethers.toBigInt(Buffer.from(fromHandlerAddress.slice(2), 'hex'))
+        const toHandlerAddress = await toHandler.getAddress();
+        const toHandlerAddressU256 = hre.ethers.toBigInt(Buffer.from(toHandlerAddress.slice(2), 'hex'))
 
-        // Add and remove manager after that manager state should correctly
-        await settlmentInstance.connect(settlementOwner).add_manager(managerAddress)
-        expect(await settlmentInstance.is_manager(managerAddress)).to.equal(true)
+        const amount = 1000
+        const toChain = "Starknet"
 
-        await settlmentInstance.connect(settlementOwner).remove_manager(managerAddress)
-        expect(await settlmentInstance.is_manager(managerAddress)).to.equal(false)
+        // Mint some token to sender and approve this that sender can lock some fund to settlement handler
+        await tokenInstance.connect(tokenOperator).mint_to(senderAddress, amount)
+        await tokenInstance.connect(sender).approve(await settlementHandlerInstance.getAddress(), amount)
 
+        // Add the settlement contract as a manager
+        await verifierInstance.connect(settlementOwner).add_manager(await settlmentInstance.getAddress());
+
+        // Add the validators
+        const validators = [validator1, validator2, validator3]
+        for (let i = 0; i < validators.length; i++) {
+            await settlmentInstance.connect(manager).add_validator(await validators[i].getAddress());
+        }
+
+
+        // Add from handler to receive handler whitelist
+        await settlementHandlerInstance.connect(settlementHnadlerOwner).add_handler(
+            chainName,
+            fromHandlerAddressU256
+        );
+
+        const tx = await settlementHandlerInstance.connect(sender)
+            .cross_chain_erc20_settlement(
+                toChain,
+                settlementHandlerAddressU256, // to handler
+                toTokenAddressU256,
+                receiverAddressU256,
+                amount
+            );
+
+
+
+        // Make erc20 message payload
+        const crossChainMsgId = hre.ethers.solidityPackedKeccak256(
+            ["uint64", "address", "address", "uint256"],
+            [
+                1,
+                settlementHandlerAddress,
+                senderAddress,
+                1
+            ]
+        )
+        const crossChainMsgIdU256 = hre.ethers.toBigInt(Buffer.from(crossChainMsgId.slice(2), 'hex'))
+        const payloadString = await messageLibTestInstance.encode_erc20_settlement_message(
+            crossChainMsgIdU256,
+            senderAddress,
+            await codecInstance.getAddress(),
+            await tokenInstance.getAddress(),
+            toTokenAddressU256,
+            receiverAddressU256,
+            amount
+        )
+        const payload = Buffer.from(payloadString.slice(2), 'hex')
+        const payloadKeccak256Bytes = Buffer.from(hre.ethers.keccak256(payload).slice(2), 'hex')
+
+
+        const txid = hre.ethers.solidityPackedKeccak256(
+            ["string", "string", "address", "address", "uint256", "uint256", "uint8", "bytes"],
+            [
+                chainName,
+                toChain,
+                senderAddress,
+                settlementHandlerAddress,
+                settlementHandlerAddressU256, // to handler
+                1,
+                5, // payload type
+                payload, // payload
+            ]
+        )
+
+        const txidU256 = hre.ethers.toBigInt(Buffer.from(txid.slice(2), 'hex'))
+
+
+
+
+
+        await expect(tx).emit(settlementHandlerInstance, 'CrossChainLocked').withArgs(
+            txidU256,
+            senderAddress,
+            receiverAddressU256,
+            chainName,
+            toChain,
+            await settlementHandlerInstance.getAddress(),
+            toTokenAddressU256,
+            amount,
+            payload
+        );
+
+
+        const settleTxid = hre.ethers.solidityPackedKeccak256(
+            ["string", "string", "address", "address", "uint256", "uint256", "uint8", "bytes"],
+            [
+                chainName,
+                toChain,
+                senderAddress,
+                settlementHandlerAddress,
+                settlementHandlerAddressU256,
+                1,
+                5,
+                payload
+            ]
+        )
+
+        const settleTxidU256 = hre.ethers.toBigInt(Buffer.from(settleTxid.slice(2), 'hex'))
+
+        const tmp = await settlementHandlerInstance.cross_chain_settlement_txs(txidU256)
+        // Make multisignature
+        const messageHash = hre.ethers.solidityPackedKeccak256(
+            ["uint256", "uint256", "address", "uint8"],
+            [
+                settleTxidU256,
+                settlementHandlerAddressU256, // from handler
+                settlementHandlerAddress, // to handler
+                2 // CrossChainStatus
+            ])
+        let signatures = Buffer.from([]);
+        for (let i = 0; i < validators.length - 1; i++) {
+            const signature = await validators[i].signMessage(hre.ethers.getBytes(messageHash));
+            const signatureBytes = Buffer.from(signature.slice(2), 'hex');
+            signatures = Buffer.concat([signatures, signatureBytes]);
+        }
+
+        await settlmentInstance.connect(validator1)
+            .receive_cross_chain_callback(
+                settleTxidU256,
+                toChain,
+                settlementHandlerAddressU256,
+                settlementHandlerAddress, // to handler
+                2,
+                0,
+                signatures
+            )
+        // await settlementHandlerInstance
+        //     .receive_cross_chain_callback(
+        //         txidU256,
+        //         senderAddress,
+        //         receiverAddressU256,
+        //         chainName,
+        //         toChain,
+        //         await settlementHandlerInstance.getAddress(),
+        //         toTokenAddressU256,
+        //         amount,
+        //         payload
+        //     )
+
+
+
+        // await settlmentInstance.connect(validator1).receive_cross_chain_msg(
+        //     txidU256,
+        //     chainName,
+        //     senderAddressU256,
+        //     fromHandlerAddressU256,
+        //     settlementHandlerAddress,
+        //     5,
+        //     payload,
+        //     0,
+        //     signatures
+        // );
+
+        // expect(await tokenInstance.balanceOf(receiverAddress)).to.be.equal(amount)
     })
 });

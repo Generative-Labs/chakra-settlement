@@ -90,7 +90,7 @@ contract ChakraSettlement is BaseSettlement {
         uint256 to_handler,
         PayloadType payload_type,
         bytes calldata payload
-    ) external virtual {
+    ) external {
         nonce_manager[from_address] += 1;
 
         address from_handler = msg.sender;
