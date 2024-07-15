@@ -55,6 +55,11 @@ In the [hardhat config](hardhat.config.ts), configure the RPC and related parame
 
 Then, use the [deploy_allinone_template.js](scripts/deploy_allinone_template.js) script to deploy all the contracts required for the `SettlementHandler`. You need to modify the content in this script.
 
+**Deploy cmd**
+```bash
+npx hardhat run scripts/<YourDeployScriptFile>.js --network <network> --config <hardhat_config_ts_file>
+```
+
 ### Verify Contract
 
 ```bash
