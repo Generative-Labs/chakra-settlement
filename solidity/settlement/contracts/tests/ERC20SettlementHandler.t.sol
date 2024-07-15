@@ -78,32 +78,6 @@ contract ERC20SettlementHandler is BaseSettlementHandler, ISettlementHandler {
         // Increment nonce for the sender
         nonce_manager[msg.sender] += 1;
 
-        // Create a new cross chain tx
-        uint256 txid = uint256(
-            keccak256(
-                abi.encodePacked(
-                    chain,
-                    to_chain,
-                    msg.sender,
-                    nonce_manager[msg.sender],
-                    to,
-                    amount
-                )
-            )
-        );
-
-        // Save the cross chain tx
-        cross_chain_settlement_txs[txid] = CrossChainSettlementTx(
-            txid,
-            to_chain,
-            msg.sender,
-            to,
-            to_token,
-            to_handler,
-            amount,
-            CrossChainTxStatus.Pending
-        );
-
         // Create a new cross chain msg id
         cross_chain_msg_id_counter += 1;
         uint256 cross_chain_msg_id = uint256(
@@ -139,6 +113,34 @@ contract ERC20SettlementHandler is BaseSettlementHandler, ISettlementHandler {
             cross_chain_msg
         );
 
+        // Create a new cross chain tx
+        uint256 txid = uint256(
+            keccak256(
+                abi.encodePacked(
+                    chain,
+                    to_chain,
+                    msg.sender,
+                    address(this), // from handler
+                    to_handler,
+                    nonce_manager[msg.sender],
+                    PayloadType.ERC20,
+                    cross_chain_msg_bytes
+                )
+            )
+        );
+
+        // Save the cross chain tx
+        cross_chain_settlement_txs[txid] = CrossChainSettlementTx(
+            txid,
+            to_chain,
+            msg.sender,
+            to,
+            to_token,
+            to_handler,
+            amount,
+            CrossChainTxStatus.Pending
+        );
+
         // Send the cross chain msg
         settlement.send_cross_chain_msg(
             to_chain,
@@ -157,8 +159,7 @@ contract ERC20SettlementHandler is BaseSettlementHandler, ISettlementHandler {
             address(this),
             to_token,
             amount,
-            codec.encode_transfer(payload)
-            // cross_chain_msg_bytes
+            cross_chain_msg_bytes
         );
     }
 
@@ -183,6 +184,7 @@ contract ERC20SettlementHandler is BaseSettlementHandler, ISettlementHandler {
                 from_chain,
                 from_address,
                 from_handler,
+                address(this),
                 keccak256(payload)
             )
         );
@@ -207,7 +209,7 @@ contract ERC20SettlementHandler is BaseSettlementHandler, ISettlementHandler {
             if (method == ERC20Method.Transfer) {
                 // Decode transfer payload
                 ERC20TransferPayload memory transfer_payload = codec
-                    .deocde_transfer(payload);
+                    .deocde_transfer(erc20_payload);
 
                 if (no_burn) {
                     require(
@@ -254,7 +256,9 @@ contract ERC20SettlementHandler is BaseSettlementHandler, ISettlementHandler {
             "Invalid from handler"
         );
 
-        bytes32 message_hash = keccak256(abi.encodePacked(txid, status));
+        bytes32 message_hash = keccak256(
+            abi.encodePacked(txid, from_handler, address(this), status)
+        );
         require(
             verifier.verify(message_hash, signatures, sign_type),
             "Invalid signature"

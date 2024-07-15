@@ -6,7 +6,7 @@ import {ISettlementHandler} from "contracts/interfaces/ISettlementHandler.sol";
 import {ISettlementSignatureVerifier} from "contracts/interfaces/ISettlementSignatureVerifier.sol";
 import {PayloadType, CrossChainMsgStatus} from "contracts/libraries/Message.sol";
 
-contract ChakraSettlement is BaseSettlement {
+contract ChakraSettlementUpgradeTest is BaseSettlement {
     mapping(uint256 => CreatedCrossChainTx) public create_cross_txs;
     mapping(uint256 => ReceivedCrossChainTx) public receive_cross_txs;
 
@@ -90,7 +90,7 @@ contract ChakraSettlement is BaseSettlement {
         uint256 to_handler,
         PayloadType payload_type,
         bytes calldata payload
-    ) external {
+    ) external virtual {
         nonce_manager[from_address] += 1;
 
         address from_handler = msg.sender;
@@ -296,5 +296,9 @@ contract ChakraSettlement is BaseSettlement {
             create_cross_txs[txid].to_handler,
             create_cross_txs[txid].status
         );
+    }
+
+    function version() public pure override returns (string memory) {
+        return "0.1.1";
     }
 }
