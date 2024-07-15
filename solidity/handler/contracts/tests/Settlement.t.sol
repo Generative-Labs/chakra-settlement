@@ -141,7 +141,7 @@ contract SettlementTest is BaseSettlementTest {
         bytes calldata payload,
         uint8 sign_type,
         bytes calldata signatures
-    ) external onlyValidator {
+    ) external {
         verifySignature(
             txid,
             from_chain,
@@ -270,7 +270,7 @@ contract SettlementTest is BaseSettlementTest {
         CrossChainMsgStatus status,
         uint8 sign_type, // validators signature type /  multisig or bls sr25519
         bytes calldata signatures
-    ) external onlyValidator {
+    ) external {
         CreatedCrossChainTx storage ccc_tx = create_cross_txs[txid];
         {
             // verify signature

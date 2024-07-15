@@ -47,11 +47,6 @@ abstract contract BaseSettlement is
     mapping(address => bool) public chakra_validators;
     uint256 public validator_count;
 
-    modifier onlyValidator() {
-        require(chakra_validators[msg.sender] == true, "Not validator");
-        _;
-    }
-
     function _Settlement_init(
         string memory _chain_name,
         uint256 _chain_id,

@@ -143,7 +143,7 @@ contract ChakraSettlementUpgradeTest is BaseSettlement {
         bytes calldata payload,
         uint8 sign_type, // validators signature type /  multisig or bls sr25519
         bytes calldata signatures // signature array
-    ) external onlyValidator {
+    ) external {
         {
             // verify signature
             bytes32 message_hash = keccak256(
@@ -217,7 +217,7 @@ contract ChakraSettlementUpgradeTest is BaseSettlement {
         CrossChainMsgStatus status,
         uint8 sign_type,
         bytes calldata signatures
-    ) external onlyValidator {
+    ) external {
         verifySignature(
             txid,
             from_handler,
