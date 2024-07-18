@@ -114,8 +114,6 @@ contract SettlementSignatureVerifier is
     ) external view returns (bool) {
         if (sign_type == 0) {
             return verifyECDSA(msgHash, signatures);
-        } else if (sign_type == 1) {
-            return verifyBLS(msgHash, signatures);
         } else {
             return false;
         }
@@ -147,12 +145,5 @@ contract SettlementSignatureVerifier is
         }
 
         return false;
-    }
-
-    function verifyBLS(
-        bytes32 /* msgHash */,
-        bytes memory /* signaturs */
-    ) internal view returns (bool) {
-        return true;
     }
 }
