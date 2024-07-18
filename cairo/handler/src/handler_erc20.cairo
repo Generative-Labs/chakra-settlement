@@ -1,5 +1,6 @@
 #[starknet::contract]
 mod ERC20Handler{
+    use openzeppelin::access::ownable::interface::OwnableABI;
     use core::option::OptionTrait;
     use core::traits::Into;
     use core::traits::TryInto;
@@ -15,9 +16,9 @@ mod ERC20Handler{
     use starknet::ClassHash;
     use starknet::{get_caller_address, get_tx_info, get_contract_address};
     use core::hash::LegacyHash;
-    use settlement_cairo::codec::{decode_transfer, encode_transfer, ERC20Transfer, Message, decode_message, encode_message, PayloadType};
+    use settlement_cairo::codec::{decode_transfer, encode_transfer, ERC20Transfer, Message, decode_message, encode_message};
     use settlement_cairo::utils::{u256_to_contract_address, contract_address_to_u256};
-    use settlement_cairo::constant::{CrossChainTxStatus, ERC20Method};
+    use settlement_cairo::constant::{CrossChainTxStatus, ERC20Method, PayloadType};
 
     component!(path: OwnableComponent, storage: ownable, event: OwnableEvent);
     component!(path: UpgradeableComponent, storage: upgradeable, event: UpgradeableEvent);
@@ -48,7 +49,6 @@ mod ERC20Handler{
         settlement_address: ContractAddress,
         token_address: ContractAddress,
         no_burn: bool,
-        depositers: LegacyMap<ContractAddress, bool>,
         created_tx: LegacyMap<felt252, CreatedCrossChainTx>,
         msg_count: u256,
         support_handler: LegacyMap<(felt252, u256), bool>,
@@ -127,6 +127,8 @@ mod ERC20Handler{
     impl ERC20HandlerImpl of IERC20Handler<ContractState> {
         fn receive_cross_chain_msg(ref self: ContractState, cross_chain_msg_id: u256, from_chain: felt252, to_chain: felt252,
         from_handler: u256, to_handler: ContractAddress, payload: Array<u8>) -> bool{
+            assert(to_handler == get_contract_address(),'error to_handler');
+
             assert(self.settlement_address.read() == get_caller_address(), 'not settlement');
 
             assert(self.support_handler.read((from_chain, from_handler)) && 
@@ -138,10 +140,7 @@ mod ERC20Handler{
                 let payload_transfer = message.payload;
                 let transfer = decode_transfer(payload_transfer);
                 if transfer.method_id == ERC20Method::TRANSFER{
-                    if self.no_burn.read(){
-                        let erc20 = IERC20Dispatcher{contract_address: self.token_address.read()};
-                        erc20.transfer(u256_to_contract_address(transfer.to), transfer.amount);
-                    }else{
+                    if !self.no_burn.read(){
                         let erc20 = IERC20MintDispatcher{contract_address: self.token_address.read()};
                         erc20.mint_to(u256_to_contract_address(transfer.to), transfer.amount);
                     }
@@ -152,16 +151,20 @@ mod ERC20Handler{
 
         fn receive_cross_chain_callback(ref self: ContractState, cross_chain_msg_id: felt252, from_chain: felt252, to_chain: felt252,
         from_handler: ContractAddress, to_handler: u256, cross_chain_msg_status: u8) -> bool{
+            assert(from_handler == get_contract_address(),'error from_handler');
+
             assert(self.settlement_address.read() == get_caller_address(), 'not settlement');
 
             assert(self.support_handler.read((from_chain, contract_address_to_u256(from_handler))) && 
                     self.support_handler.read((to_chain, to_handler)), 'not support handler');
 
-            if self.no_burn.read(){
+            if !self.no_burn.read(){
                 let erc20 = IERC20MintDispatcher{contract_address: self.token_address.read()};
                 erc20.burn_from(get_contract_address(), self.created_tx.read(cross_chain_msg_id).amount);
             }
+
             let created_tx = self.created_tx.read(cross_chain_msg_id);
+            assert(created_tx.tx_id != 0, 'tx_id not exist');
             self.created_tx.write(cross_chain_msg_id, CreatedCrossChainTx{
                 tx_id: created_tx.tx_id,
                 from_chain: created_tx.from_chain,
@@ -177,11 +180,12 @@ mod ERC20Handler{
             return true;
         }
 
-        fn cross_chain_erc20_settlement(ref self: ContractState, to_chain: felt252, to_handler: u256, to_token: u256, to: u256, amount: u256){
+        fn cross_chain_erc20_settlement(ref self: ContractState, to_chain: felt252, to_handler: u256, to_token: u256, to: u256, amount: u256) -> felt252{
             assert(self.support_handler.read((to_chain, to_handler)), 'not support handler');
 
             let token = IERC20Dispatcher{contract_address: self.token_address.read()};
-            token.transfer_from(get_caller_address(), get_contract_address(), amount);
+            // assert(token.allowance(get_caller_address(), get_contract_address())>= amount, 'insufficient allowance');
+            token.transfer(get_contract_address(), amount);
             let tx_id = LegacyHash::hash(get_tx_info().unbox().transaction_hash, self.msg_count.read());
             let tx: CreatedCrossChainTx = CreatedCrossChainTx{
                     tx_id: tx_id,
@@ -214,9 +218,9 @@ mod ERC20Handler{
                 payload: encode_transfer(transfer),
             };
             
-            // TODO send cross chain msg
+            // send cross chain msg
             self.send_cross_chain_msg(to_chain, to_handler, PayloadType::ERC20, encode_message(message));
-            // TODO emit CrossChainLocked
+            // emit CrossChainLocked
 
             self.emit(
                     CrossChainLocked{
@@ -230,6 +234,7 @@ mod ERC20Handler{
                         amount: amount
                     }
                 );
+            return tx_id;
         }
 
         fn is_valid_handler(self: @ContractState, chain_name: felt252, handler: u256) -> bool{

@@ -28,8 +28,9 @@ pub trait IERC20Mint<TContractState> {
 
 #[starknet::interface]
 pub trait IERC20<TContractState> {
-    fn transfer(ref self: TContractState, to: ContractAddress, amount: u256) -> bool;
+    fn transfer(ref self: TContractState, recipient: ContractAddress, amount: u256) -> bool;
     fn transfer_from(ref self: TContractState, from: ContractAddress, to: ContractAddress, amount: u256) -> bool;
+    fn allowance(self: @TContractState, owner: ContractAddress, spender: ContractAddress) -> u256;
     fn burn(ref self: TContractState, account: ContractAddress, amount: u256);
 }
 
@@ -39,7 +40,7 @@ pub trait IERC20Handler<TContractState> {
         from_handler: u256, to_handler: ContractAddress, payload: Array<u8>) -> bool;
     fn receive_cross_chain_callback(ref self: TContractState, cross_chain_msg_id: felt252, from_chain: felt252, to_chain: felt252,
         from_handler: ContractAddress, to_handler: u256, cross_chain_msg_status: u8) -> bool;
-    fn cross_chain_erc20_settlement(ref self: TContractState, to_chain: felt252, to_handler: u256, to_token: u256, to: u256, amount: u256);
+    fn cross_chain_erc20_settlement(ref self: TContractState, to_chain: felt252, to_handler: u256, to_token: u256, to: u256, amount: u256) -> felt252;
     fn is_valid_handler(self: @TContractState, chain_name: felt252, handler: u256) -> bool;
     fn set_support_handler(ref self:TContractState, chain_name: felt252, handler: u256, support: bool);
 }

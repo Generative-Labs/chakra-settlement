@@ -2,16 +2,6 @@ use core::array::ArrayTrait;
 use starknet::ContractAddress;
 use settlement_cairo::utils::{u8_array_to_u256, u256_to_u8_array};
 
-pub mod PayloadType{
-    pub const Raw: u8 = 0;
-    pub const BTCDeposit: u8 = 1;
-    pub const BTCWithdraw: u8 = 2;
-    pub const BTCStake: u8 = 3;
-    pub const BTCUnstake: u8 = 4;
-    pub const ERC20: u8 = 5;
-    pub const ERC721: u8 = 6;
-}
-
 #[derive(Drop)]
 pub struct Message {
     pub version: u8,
