@@ -47,11 +47,6 @@ abstract contract BaseSettlement is
     mapping(address => bool) public chakra_validators;
     uint256 public validator_count;
 
-    modifier onlyValidator() {
-        require(chakra_validators[msg.sender] == true, "Not validator");
-        _;
-    }
-
     function _Settlement_init(
         string memory _chain_name,
         uint256 _chain_id,
@@ -140,7 +135,7 @@ abstract contract BaseSettlement is
         return nonce_manager[account];
     }
 
-    function version() public pure returns (string memory) {
+    function version() public pure virtual returns (string memory) {
         return "0.1.0";
     }
 }

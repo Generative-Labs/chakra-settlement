@@ -1,14 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
-
-import {BaseSettlementTest} from "contracts/tests/BaseSettlement.t.sol";
+import {BaseSettlement} from "contracts/BaseSettlement.sol";
 import {ISettlementHandler} from "contracts/interfaces/ISettlementHandler.sol";
 import {ISettlementSignatureVerifier} from "contracts/interfaces/ISettlementSignatureVerifier.sol";
-import {CrossChainMsgStatus, PayloadType} from "contracts/libraries/Message.sol";
+import {PayloadType, CrossChainMsgStatus} from "contracts/libraries/Message.sol";
 
-contract SettlementTest is BaseSettlementTest {
+contract ChakraSettlementUpgradeTest is BaseSettlement {
     mapping(uint256 => CreatedCrossChainTx) public create_cross_txs;
     mapping(uint256 => ReceivedCrossChainTx) public receive_cross_txs;
 
@@ -42,6 +40,7 @@ contract SettlementTest is BaseSettlementTest {
         string to_chain,
         address from_handler,
         uint256 to_handler,
+        PayloadType payload_type,
         bytes payload
     );
 
@@ -52,7 +51,8 @@ contract SettlementTest is BaseSettlementTest {
         string from_chain,
         string to_chain,
         address from_handler,
-        uint256 to_handler
+        uint256 to_handler,
+        PayloadType payload_type
     );
 
     // Cross Chain result emit by sender side
@@ -72,7 +72,7 @@ contract SettlementTest is BaseSettlementTest {
         address _owner,
         address[] memory _managers,
         uint256 _required_validators,
-        ISettlementSignatureVerifier _verify_contract
+        address _verify_contract
     ) public initializer {
         _Settlement_init(
             _chain_name,
@@ -88,22 +88,23 @@ contract SettlementTest is BaseSettlementTest {
         string memory to_chain,
         address from_address,
         uint256 to_handler,
+        PayloadType payload_type,
         bytes calldata payload
     ) external virtual {
         nonce_manager[from_address] += 1;
-        string memory from_chain = contract_chain_name;
 
         address from_handler = msg.sender;
 
         uint256 txid = uint256(
             keccak256(
                 abi.encodePacked(
-                    from_chain,
+                    contract_chain_name,
                     to_chain,
                     from_address,
                     from_handler,
                     to_handler,
                     nonce_manager[from_address],
+                    payload_type,
                     payload
                 )
             )
@@ -111,10 +112,10 @@ contract SettlementTest is BaseSettlementTest {
 
         create_cross_txs[txid] = CreatedCrossChainTx(
             txid,
-            from_chain,
+            contract_chain_name,
             to_chain,
             from_address,
-            address(this),
+            from_handler,
             to_handler,
             payload,
             CrossChainMsgStatus.Pending
@@ -123,10 +124,11 @@ contract SettlementTest is BaseSettlementTest {
         emit CrossChainMsg(
             txid,
             from_address,
-            from_chain,
+            contract_chain_name,
             to_chain,
             from_handler,
             to_handler,
+            payload_type,
             payload
         );
     }
@@ -136,86 +138,35 @@ contract SettlementTest is BaseSettlementTest {
         string memory from_chain,
         uint256 from_address,
         uint256 from_handler,
-        ISettlementHandler to_handler,
+        address to_handler,
         PayloadType payload_type,
         bytes calldata payload,
-        uint8 sign_type,
-        bytes calldata signatures
+        uint8 sign_type, // validators signature type /  multisig or bls sr25519
+        bytes calldata signatures // signature array
     ) external {
-        verifySignature(
-            txid,
-            from_chain,
-            from_address,
-            from_handler,
-            to_handler,
-            payload,
-            sign_type,
-            signatures
-        );
-        processCrossChainMsg(
-            txid,
-            from_chain,
-            from_address,
-            from_handler,
-            to_handler,
-            payload_type,
-            payload,
-            sign_type,
-            signatures
-        );
-    }
-
-    function verifySignature(
-        uint256 txid,
-        string memory from_chain,
-        uint256 from_address,
-        uint256 from_handler,
-        ISettlementHandler to_handler,
-        bytes memory payload,
-        uint8 sign_type,
-        bytes memory signatures
-    ) internal view {
-        bytes32 message_hash = MessageHashUtils.toEthSignedMessageHash(
-            keccak256(
+        {
+            // verify signature
+            bytes32 message_hash = keccak256(
                 abi.encodePacked(
                     txid,
                     from_chain,
                     from_address,
                     from_handler,
                     to_handler,
-                    payload
+                    keccak256(payload)
                 )
-            )
-        );
+            );
 
-        // FIXME: replace with the right signers
-        address[] memory signers = new address[](0);
-        require(
-            signature_verifier.verify(
-                message_hash,
-                signatures,
-                signers,
-                sign_type
-            ),
-            "Invalid signature"
-        );
-    }
+            require(
+                signature_verifier.verify(message_hash, signatures, sign_type),
+                "Invalid signature"
+            );
 
-    function processCrossChainMsg(
-        uint256 txid,
-        string memory from_chain,
-        uint256 from_address,
-        uint256 from_handler,
-        ISettlementHandler to_handler,
-        PayloadType payload_type,
-        bytes memory payload,
-        uint8 sign_type,
-        bytes memory signatures
-    ) internal {
-        require(
-            receive_cross_txs[txid].status == CrossChainMsgStatus.Pending,
-            "Invalid transaction status"
-        );
+            require(
+                receive_cross_txs[txid].status == CrossChainMsgStatus.Unknow,
+                "Invalid transaction status"
+            );
+        }
 
         receive_cross_txs[txid] = ReceivedCrossChainTx(
             txid,
@@ -228,7 +179,7 @@ contract SettlementTest is BaseSettlementTest {
             CrossChainMsgStatus.Pending
         );
 
-        bool result = to_handler.receive_cross_chain_msg(
+        bool result = ISettlementHandler(to_handler).receive_cross_chain_msg(
             txid,
             from_chain,
             from_address,
@@ -239,27 +190,23 @@ contract SettlementTest is BaseSettlementTest {
             signatures
         );
 
+        CrossChainMsgStatus status = CrossChainMsgStatus.Failed;
         if (result == true) {
+            status = CrossChainMsgStatus.Success;
             receive_cross_txs[txid].status = CrossChainMsgStatus.Success;
-            emit CrossChainHandleResult(
-                txid,
-                CrossChainMsgStatus.Success,
-                contract_chain_name,
-                from_chain,
-                address(this),
-                from_handler
-            );
         } else {
             receive_cross_txs[txid].status = CrossChainMsgStatus.Failed;
-            emit CrossChainHandleResult(
-                txid,
-                CrossChainMsgStatus.Failed,
-                contract_chain_name,
-                from_chain,
-                address(this),
-                from_handler
-            );
         }
+
+        emit CrossChainHandleResult(
+            txid,
+            status,
+            contract_chain_name,
+            from_chain,
+            address(to_handler),
+            from_handler,
+            payload_type
+        );
     }
 
     function receive_cross_chain_callback(
@@ -268,63 +215,90 @@ contract SettlementTest is BaseSettlementTest {
         uint256 from_handler,
         address to_handler,
         CrossChainMsgStatus status,
-        uint8 sign_type, // validators signature type /  multisig or bls sr25519
+        uint8 sign_type,
         bytes calldata signatures
     ) external {
-        CreatedCrossChainTx storage ccc_tx = create_cross_txs[txid];
-        {
-            // verify signature
-            bytes32 message_hash = MessageHashUtils.toEthSignedMessageHash(
-                keccak256(
-                    abi.encodePacked(txid, from_handler, to_handler, status)
-                )
-            );
+        verifySignature(
+            txid,
+            from_handler,
+            to_handler,
+            status,
+            sign_type,
+            signatures
+        );
+        processCrossChainCallback(
+            txid,
+            from_chain,
+            from_handler,
+            to_handler,
+            status,
+            sign_type,
+            signatures
+        );
+        emitCrossChainResult(txid);
+    }
 
-            // FIXME: replace with the right signers
-            address[] memory signers = new address[](0);
+    function verifySignature(
+        uint256 txid,
+        uint256 from_handler,
+        address to_handler,
+        CrossChainMsgStatus status,
+        uint8 sign_type,
+        bytes calldata signatures
+    ) internal view {
+        bytes32 message_hash = keccak256(
+            abi.encodePacked(txid, from_handler, to_handler, status)
+        );
 
-            require(
-                signature_verifier.verify(
-                    message_hash,
-                    signatures,
-                    signers,
-                    sign_type
-                ),
-                "Invalid signature"
-            );
+        require(
+            signature_verifier.verify(message_hash, signatures, sign_type),
+            "Invalid signature"
+        );
+    }
 
-            // Update txid result
-            require(
-                ccc_tx.status == CrossChainMsgStatus.Pending,
-                "Invalid transaction status"
-            );
+    function processCrossChainCallback(
+        uint256 txid,
+        string memory from_chain,
+        uint256 from_handler,
+        address to_handler,
+        CrossChainMsgStatus status,
+        uint8 sign_type,
+        bytes calldata signatures
+    ) internal {
+        require(
+            create_cross_txs[txid].status == CrossChainMsgStatus.Pending,
+            "Invalid transaction status"
+        );
+
+        if (
+            ISettlementHandler(to_handler).receive_cross_chain_callback(
+                txid,
+                from_chain,
+                from_handler,
+                status,
+                sign_type,
+                signatures
+            )
+        ) {
+            create_cross_txs[txid].status = status;
+        } else {
+            create_cross_txs[txid].status = CrossChainMsgStatus.Failed;
         }
+    }
 
-        {
-            bool success = ISettlementHandler(to_handler)
-                .receive_cross_chain_callback(
-                    txid,
-                    from_chain,
-                    from_handler,
-                    status,
-                    sign_type,
-                    signatures
-                );
-            if (success == true) {
-                ccc_tx.status = status;
-            } else {
-                ccc_tx.status = CrossChainMsgStatus.Failed;
-            }
-        }
-
+    function emitCrossChainResult(uint256 txid) internal {
         emit CrossChainResult(
             txid,
-            ccc_tx.from_chain,
-            ccc_tx.to_chain,
-            ccc_tx.from_address,
-            ccc_tx.from_handler,
-            ccc_tx.to_handler,
-            ccc_tx.status
+            create_cross_txs[txid].from_chain,
+            create_cross_txs[txid].to_chain,
+            create_cross_txs[txid].from_address,
+            create_cross_txs[txid].from_handler,
+            create_cross_txs[txid].to_handler,
+            create_cross_txs[txid].status
         );
+    }
+
+    function version() public pure override returns (string memory) {
+        return "0.1.1";
     }
 }
