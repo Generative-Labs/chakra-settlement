@@ -9,9 +9,10 @@ use starknet::ContractAddress;
 use starknet::{get_tx_info, get_caller_address};
 use settlement_cairo::interfaces::{IERC20HandlerDispatcher, IERC20HandlerDispatcherTrait, IChakraSettlementDispatcher, IChakraSettlementDispatcherTrait};
 use settlement_cairo::codec::{decode_transfer, encode_transfer, ERC20Transfer, Message, decode_message, encode_message};
-use settlement_cairo::utils::{u256_to_contract_address, contract_address_to_u256};
+use settlement_cairo::utils::{u256_to_contract_address, contract_address_to_u256, u256_to_u8_array};
 use settlement_cairo::ckr_btc::{IckrBTCDispatcher};
 use openzeppelin::token::erc20::interface::IERC20Dispatcher;
+
 #[test]
 fn test_erc20_codec(){
     // test erc20 codec
@@ -35,8 +36,9 @@ fn test_erc20_codec(){
     };
 
     let encoded_array_u8 = encode_transfer(transfer);
-    
+    assert(encoded_array_u8.len() == 161, 'len error');
     assert(span_array_u8.at(0) == encoded_array_u8.at(0), 'aaaa');
+    assert(span_array_u8.at(2) == encoded_array_u8.at(2), '11111');
     assert(span_array_u8.at(23) == encoded_array_u8.at(23), 'bbbb');
     assert(span_array_u8.at(55) == encoded_array_u8.at(55), 'cccc');
     assert(span_array_u8.at(84) == encoded_array_u8.at(84), 'dddd');

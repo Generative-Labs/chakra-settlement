@@ -3,6 +3,8 @@ use core::option::OptionTrait;
 use core::traits::TryInto;
 use core::array::ArrayTrait;
 use starknet::ContractAddress;
+use core::integer::{u128_safe_divmod};
+
 const MASK_8: u256 = 0xFF;
 const TWO_POW_8: u256 = 0x100;
 const TWO_POW_16: u256 = 0x10000;
@@ -355,39 +357,106 @@ pub fn u8_array_to_u256(arr: Span<u8>) -> u256 {
     u256 { low, high }
 }
 
-pub fn u256_to_u8_array(value: u256) -> Array<u8> {
-    let mut result = ArrayTrait::<u8>::new();
-    result.append((value & MASK_8).try_into().unwrap());
-    result.append(((value / TWO_POW_8) & MASK_8).try_into().unwrap());
-    result.append(((value / TWO_POW_16) & MASK_8).try_into().unwrap());
-    result.append(((value / TWO_POW_24) & MASK_8).try_into().unwrap());
-    result.append(((value / TWO_POW_32) & MASK_8).try_into().unwrap());
-    result.append(((value / TWO_POW_40) & MASK_8).try_into().unwrap());
-    result.append(((value / TWO_POW_48) & MASK_8).try_into().unwrap());
-    result.append(((value / TWO_POW_56) & MASK_8).try_into().unwrap());
-    result.append(((value / TWO_POW_64) & MASK_8).try_into().unwrap());
-    result.append(((value / TWO_POW_72) & MASK_8).try_into().unwrap());
-    result.append(((value / TWO_POW_80) & MASK_8).try_into().unwrap());
-    result.append(((value / TWO_POW_88) & MASK_8).try_into().unwrap());
-    result.append(((value / TWO_POW_96) & MASK_8).try_into().unwrap());
-    result.append(((value / TWO_POW_104) & MASK_8).try_into().unwrap());
-    result.append(((value / TWO_POW_112) & MASK_8).try_into().unwrap());
-    result.append(((value / TWO_POW_120) & MASK_8).try_into().unwrap());
-
-    let mut final = ArrayTrait::<u8>::new();
-    let mut i = 0;
-    loop{
-        if i <= 32 - result.len() -1{
-            final.append(0);
-        }else if i <= 31 {
-            final.append(* result.span().at(31-i));
-        }else{
-            break;
-        }
-        i+=1;
-    };
-    final
+pub fn u256_to_u8_array(word: u256) -> Array<u8> {
+    let (rest, byte_32) = u128_safe_divmod(word.low, 0x100);
+    let (rest, byte_31) = u128_safe_divmod(rest, 0x100);
+    let (rest, byte_30) = u128_safe_divmod(rest, 0x100);
+    let (rest, byte_29) = u128_safe_divmod(rest, 0x100);
+    let (rest, byte_28) = u128_safe_divmod(rest, 0x100);
+    let (rest, byte_27) = u128_safe_divmod(rest, 0x100);
+    let (rest, byte_26) = u128_safe_divmod(rest, 0x100);
+    let (rest, byte_25) = u128_safe_divmod(rest, 0x100);
+    let (rest, byte_24) = u128_safe_divmod(rest, 0x100);
+    let (rest, byte_23) = u128_safe_divmod(rest, 0x100);
+    let (rest, byte_22) = u128_safe_divmod(rest, 0x100);
+    let (rest, byte_21) = u128_safe_divmod(rest, 0x100);
+    let (rest, byte_20) = u128_safe_divmod(rest, 0x100);
+    let (rest, byte_19) = u128_safe_divmod(rest, 0x100);
+    let (byte_17, byte_18) = u128_safe_divmod(rest, 0x100);
+    let (rest, byte_16) = u128_safe_divmod(word.high, 0x100);
+    let (rest, byte_15) = u128_safe_divmod(rest, 0x100);
+    let (rest, byte_14) = u128_safe_divmod(rest, 0x100);
+    let (rest, byte_13) = u128_safe_divmod(rest, 0x100);
+    let (rest, byte_12) = u128_safe_divmod(rest, 0x100);
+    let (rest, byte_11) = u128_safe_divmod(rest, 0x100);
+    let (rest, byte_10) = u128_safe_divmod(rest, 0x100);
+    let (rest, byte_9) = u128_safe_divmod(rest, 0x100);
+    let (rest, byte_8) = u128_safe_divmod(rest, 0x100);
+    let (rest, byte_7) = u128_safe_divmod(rest, 0x100);
+    let (rest, byte_6) = u128_safe_divmod(rest, 0x100);
+    let (rest, byte_5) = u128_safe_divmod(rest, 0x100);
+    let (rest, byte_4) = u128_safe_divmod(rest, 0x100);
+    let (rest, byte_3) = u128_safe_divmod(rest, 0x100);
+    let (byte_1, byte_2) = u128_safe_divmod(rest, 0x100);
+    array![
+        byte_1.try_into().unwrap(),
+        byte_2.try_into().unwrap(),
+        byte_3.try_into().unwrap(),
+        byte_4.try_into().unwrap(),
+        byte_5.try_into().unwrap(),
+        byte_6.try_into().unwrap(),
+        byte_7.try_into().unwrap(),
+        byte_8.try_into().unwrap(),
+        byte_9.try_into().unwrap(),
+        byte_10.try_into().unwrap(),
+        byte_11.try_into().unwrap(),
+        byte_12.try_into().unwrap(),
+        byte_13.try_into().unwrap(),
+        byte_14.try_into().unwrap(),
+        byte_15.try_into().unwrap(),
+        byte_16.try_into().unwrap(),
+        byte_17.try_into().unwrap(),
+        byte_18.try_into().unwrap(),
+        byte_19.try_into().unwrap(),
+        byte_20.try_into().unwrap(),
+        byte_21.try_into().unwrap(),
+        byte_22.try_into().unwrap(),
+        byte_23.try_into().unwrap(),
+        byte_24.try_into().unwrap(),
+        byte_25.try_into().unwrap(),
+        byte_26.try_into().unwrap(),
+        byte_27.try_into().unwrap(),
+        byte_28.try_into().unwrap(),
+        byte_29.try_into().unwrap(),
+        byte_30.try_into().unwrap(),
+        byte_31.try_into().unwrap(),
+        byte_32.try_into().unwrap(),
+    ]
 }
+
+// pub fn u256_to_u8_array(value: u256) -> Array<u8> {
+//     let mut result = ArrayTrait::<u8>::new();
+//     result.append((value & MASK_8).try_into().unwrap());
+//     result.append(((value / TWO_POW_8) & MASK_8).try_into().unwrap());
+//     result.append(((value / TWO_POW_16) & MASK_8).try_into().unwrap());
+//     result.append(((value / TWO_POW_24) & MASK_8).try_into().unwrap());
+//     result.append(((value / TWO_POW_32) & MASK_8).try_into().unwrap());
+//     result.append(((value / TWO_POW_40) & MASK_8).try_into().unwrap());
+//     result.append(((value / TWO_POW_48) & MASK_8).try_into().unwrap());
+//     result.append(((value / TWO_POW_56) & MASK_8).try_into().unwrap());
+//     result.append(((value / TWO_POW_64) & MASK_8).try_into().unwrap());
+//     result.append(((value / TWO_POW_72) & MASK_8).try_into().unwrap());
+//     result.append(((value / TWO_POW_80) & MASK_8).try_into().unwrap());
+//     result.append(((value / TWO_POW_88) & MASK_8).try_into().unwrap());
+//     result.append(((value / TWO_POW_96) & MASK_8).try_into().unwrap());
+//     result.append(((value / TWO_POW_104) & MASK_8).try_into().unwrap());
+//     result.append(((value / TWO_POW_112) & MASK_8).try_into().unwrap());
+//     result.append(((value / TWO_POW_120) & MASK_8).try_into().unwrap());
+
+//     let mut final = ArrayTrait::<u8>::new();
+//     let mut i = 0;
+//     loop{
+//         if i <= 32 - result.len() -1{
+//             final.append(0);
+//         }else if i <= 31 {
+//             final.append(* result.span().at(31-i));
+//         }else{
+//             break;
+//         }
+//         i+=1;
+//     };
+//     final
+// }
 
 fn u128_array_slice(src: @Array<u128>, mut begin: usize, end: usize) -> Array<u128> {
     let mut slice = ArrayTrait::new();
