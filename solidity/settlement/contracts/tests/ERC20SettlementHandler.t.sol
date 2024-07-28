@@ -119,12 +119,10 @@ contract ERC20SettlementHandler is BaseSettlementHandler, ISettlementHandler {
                 abi.encodePacked(
                     chain,
                     to_chain,
-                    msg.sender,
-                    address(this), // from handler
+                    msg.sender, // from address for settlement to calculate txid
+                    address(this), //  from handler for settlement to calculate txid
                     to_handler,
-                    nonce_manager[msg.sender],
-                    PayloadType.ERC20,
-                    cross_chain_msg_bytes
+                    nonce_manager[msg.sender]
                 )
             )
         );
@@ -164,40 +162,21 @@ contract ERC20SettlementHandler is BaseSettlementHandler, ISettlementHandler {
     }
 
     function receive_cross_chain_msg(
-        uint256 txid,
+        uint256 /**txid */,
         string memory from_chain,
-        uint256 from_address,
+        uint256 /**from_address */,
         uint256 from_handler,
         PayloadType payload_type,
         bytes calldata payload,
-        uint8 sign_type,
-        bytes calldata signatures
+        uint8 /**sign type */,
+        bytes calldata /**signaturs */
     ) external returns (bool) {
         //  from_handler need in whitelist
         if (!is_valid_handler(from_chain, from_handler)) {
             return false;
         }
 
-        bytes32 message_hash = keccak256(
-            abi.encodePacked(
-                txid,
-                from_chain,
-                from_address,
-                from_handler,
-                address(this),
-                keccak256(payload)
-            )
-        );
-
-        require(
-            verifier.verify(message_hash, signatures, sign_type),
-            "Invalid signature"
-        );
-
-        require(
-            MessageV1Codec.payload_type(payload) == PayloadType.ERC20,
-            "Invalid payload type"
-        );
+        require(payload_type == PayloadType.ERC20, "Invalid payload type");
 
         bytes memory erc20_payload = MessageV1Codec.payload(payload);
 
