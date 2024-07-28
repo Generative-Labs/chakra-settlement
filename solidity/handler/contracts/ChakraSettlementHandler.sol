@@ -123,33 +123,6 @@ contract ChakraSettlementHandler is BaseSettlementHandler, ISettlementHandler {
         // Increment nonce for the sender
         nonce_manager[msg.sender] += 1;
 
-        // Create a new cross chain tx
-        uint256 txid = uint256(
-            keccak256(
-                abi.encodePacked(
-                    chain,
-                    to_chain,
-                    msg.sender,
-                    nonce_manager[msg.sender],
-                    to,
-                    amount
-                )
-            )
-        );
-
-        // Save the cross chain tx
-        create_cross_txs[txid] = CreatedCrossChainTx(
-            txid,
-            chain,
-            to_chain,
-            msg.sender,
-            to,
-            address(this),
-            to_token,
-            amount,
-            CrossChainTxStatus.Pending
-        );
-
         // Create a new cross chain msg id
         cross_chain_msg_id_counter += 1;
         uint256 cross_chain_msg_id = uint256(
@@ -185,6 +158,33 @@ contract ChakraSettlementHandler is BaseSettlementHandler, ISettlementHandler {
             cross_chain_msg
         );
 
+        // Create a new cross chain tx
+        uint256 txid = uint256(
+            keccak256(
+                abi.encodePacked(
+                    chain,
+                    to_chain,
+                    msg.sender, // from address for settlement to calculate txid
+                    address(this), //  from handler for settlement to calculate txid
+                    to_handler,
+                    nonce_manager[msg.sender]
+                )
+            )
+        );
+
+        // Save the cross chain tx
+        create_cross_txs[txid] = CreatedCrossChainTx(
+            txid,
+            chain,
+            to_chain,
+            msg.sender,
+            to,
+            address(this),
+            to_token,
+            amount,
+            CrossChainTxStatus.Pending
+        );
+
         // Send the cross chain msg
         settlement.send_cross_chain_msg(
             to_chain,
@@ -215,14 +215,14 @@ contract ChakraSettlementHandler is BaseSettlementHandler, ISettlementHandler {
     }
 
     function receive_cross_chain_msg(
-        uint256  txid ,
+        uint256 /**txid */,
         string memory from_chain,
-        uint256  from_address ,
+        uint256 /**from_address */,
         uint256 from_handler,
         PayloadType payload_type,
         bytes calldata payload,
-        uint8  sign_type ,
-        bytes calldata  signatures 
+        uint8 /**sign type */,
+        bytes calldata /**signaturs */
     ) external onlySettlement returns (bool) {
         //  from_handler need in whitelist
         if (is_valid_handler(from_chain, from_handler) == false) {
