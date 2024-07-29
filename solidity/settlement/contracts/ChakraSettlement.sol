@@ -98,14 +98,12 @@ contract ChakraSettlement is BaseSettlement {
         uint256 txid = uint256(
             keccak256(
                 abi.encodePacked(
-                    contract_chain_name,
+                    contract_chain_name, // from chain
                     to_chain,
-                    from_address,
-                    from_handler,
+                    from_address, // msg.sender address
+                    from_handler, // settlement handler address
                     to_handler,
-                    nonce_manager[from_address],
-                    payload_type,
-                    payload
+                    nonce_manager[from_address]
                 )
             )
         );

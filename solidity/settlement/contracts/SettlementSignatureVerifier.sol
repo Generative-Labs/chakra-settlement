@@ -128,17 +128,12 @@ contract SettlementSignatureVerifier is
             "Signature length must be a multiple of 65"
         );
 
-        bytes32 signed_message_hash = MessageHashUtils.toEthSignedMessageHash(
-            msgHash
-        );
-
         uint256 len = signatures.length;
         uint256 m = 0;
         for (uint256 i = 0; i < len; i += 65) {
             bytes memory sig = signatures[i:i + 65];
             if (
-                validators[signed_message_hash.recover(sig)] &&
-                ++m >= required_validators
+                validators[msgHash.recover(sig)] && ++m >= required_validators
             ) {
                 return true;
             }
