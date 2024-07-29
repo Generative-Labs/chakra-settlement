@@ -43,6 +43,8 @@ pub trait IERC20Handler<TContractState> {
     fn cross_chain_erc20_settlement(ref self: TContractState, to_chain: felt252, to_handler: u256, to_token: u256, to: u256, amount: u256) -> felt252;
     fn is_valid_handler(self: @TContractState, chain_name: felt252, handler: u256) -> bool;
     fn set_support_handler(ref self:TContractState, chain_name: felt252, handler: u256, support: bool);
+    fn set_no_burn(ref self:TContractState, no_burn: bool);
+    fn no_burn(self: @TContractState)->bool;
 }
 
 #[starknet::interface]
@@ -56,7 +58,6 @@ pub trait IHandler<TContractState> {
 
 #[starknet::interface]
 pub trait IChakraSettlement<TContractState> {
-    fn get_signature_pub_key(self: @TContractState, message_hash: felt252, r: felt252, s:felt252, y: bool) -> felt252;
 
     fn add_validator(ref self: TContractState, new_validator: felt252) -> bool;
     fn remove_validator(ref self: TContractState, old_validator: felt252) -> bool;
@@ -72,18 +73,6 @@ pub trait IChakraSettlement<TContractState> {
         ref self: TContractState, to_chain: felt252, to_handler: u256, payload_type :u8, payload: Array<u8>,
     ) -> felt252;
 
-    fn receive_cross_chain_callback(
-        ref self: TContractState,
-        cross_chain_msg_id: felt252,
-        from_chain: felt252,
-        to_chain: felt252,
-        from_handler: ContractAddress,
-        to_handler: u256,
-        cross_chain_msg_status: u8,
-        sign_type: u8,
-        signatures: Array<(felt252, felt252, bool)>,
-    ) -> bool;
-
     fn receive_cross_chain_msg(
         ref self: TContractState,
         cross_chain_msg_id: u256,
@@ -97,6 +86,18 @@ pub trait IChakraSettlement<TContractState> {
         payload_type: u8
     ) -> bool;
 
+    fn receive_cross_chain_callback(
+        ref self: TContractState,
+        cross_chain_msg_id: felt252,
+        from_chain: felt252,
+        to_chain: felt252,
+        from_handler: ContractAddress,
+        to_handler: u256,
+        cross_chain_msg_status: u8,
+        sign_type: u8,
+        signatures: Array<(felt252, felt252, bool)>,
+    ) -> bool;
+
     fn get_recevied_tx(self: @TContractState, tx_id: u256) -> ReceivedTx;
 
     fn get_created_tx(self: @TContractState, tx_id: felt252) -> CreatedTx;
@@ -104,4 +105,6 @@ pub trait IChakraSettlement<TContractState> {
     fn set_chain_name(ref self: TContractState, chain_name: felt252);
 
     fn chain_name(self: @TContractState) -> felt252;
+
+    
 }

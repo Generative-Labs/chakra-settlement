@@ -136,16 +136,16 @@ mod ERC20Handler{
 
             let message :Message= decode_message(payload);
             let payload_type = message.payload_type;
-            if payload_type == PayloadType::ERC20{
-                let payload_transfer = message.payload;
-                let transfer = decode_transfer(payload_transfer);
-                if transfer.method_id == ERC20Method::TRANSFER{
-                    if !self.no_burn.read(){
-                        let erc20 = IERC20MintDispatcher{contract_address: self.token_address.read()};
-                        erc20.mint_to(u256_to_contract_address(transfer.to), transfer.amount);
-                    }
-                }
+            assert(payload_type == PayloadType::ERC20, 'payload type not erc20');
+            let payload_transfer = message.payload;
+            let transfer = decode_transfer(payload_transfer);
+            assert(transfer.method_id == ERC20Method::TRANSFER, 'ERC20Method must TRANSFER');
+            
+            if !self.no_burn.read(){
+                let erc20 = IERC20MintDispatcher{contract_address: self.token_address.read()};
+                erc20.mint_to(u256_to_contract_address(transfer.to), transfer.amount);
             }
+            
             return true;
         }
 
@@ -245,6 +245,16 @@ mod ERC20Handler{
             self.ownable.assert_only_owner();
             self.support_handler.write((chain_name, handler), support);
         }
+
+        fn set_no_burn(ref self:ContractState, no_burn: bool){
+            self.ownable.assert_only_owner();
+            self.no_burn.write(no_burn);
+        }
+
+        fn no_burn(self: @ContractState) -> bool{
+            return self.no_burn.read();
+        }
+
     }
 
     #[abi(embed_v0)]

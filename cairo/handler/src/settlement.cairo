@@ -42,23 +42,6 @@ mod ChakraSettlement {
         pub const ERC721: u8 = 5;
     }
 
-
-    pub mod Errors {
-        pub const NOT_OWNER: felt252 = 'Caller is not the owner';
-        pub const NOT_MANAGER: felt252 = 'Caller is not a manager';
-        pub const SAME_VALUE: felt252 = 'value same as you submited';
-        pub const ALREADY_MANAGER: felt252 = 'Caller is a manager already';
-        pub const NOT_VALIDATOR: felt252 = 'Caller is not a validator';
-        pub const ALREADY_VALIDATOR: felt252 = 'Caller is a validator already';
-        pub const NOT_PENDING_OWNER: felt252 = 'Caller is not the pending owner';
-        pub const ZERO_ADDRESS_CALLER: felt252 = 'Caller is the zero address';
-        pub const ZERO_ADDRESS_OWNER: felt252 = 'New owner is the zero address';
-        pub const ALREADY_AUTH: felt252 = 'do not auth again';
-        pub const HANDLER_NOT_ALLOWED: felt252 = 'handler not allowed to call me';
-        pub const FAILED_TO_SET_CHAIN_NAME: felt252 = 'failed to set chain name';
-    }
-
-
     // Ownable Mixin
     #[abi(embed_v0)]
     impl OwnableMixinImpl = OwnableComponent::OwnableMixinImpl<ContractState>;
@@ -73,14 +56,19 @@ mod ChakraSettlement {
         ownable: OwnableComponent::Storage,
         #[substorage(v0)]
         upgradeable: UpgradeableComponent::Storage,
+        // storage the pubkeys as validator
         chakra_validators_pubkey: LegacyMap<felt252, u8>,
+        // storage manager
         chakra_managers: LegacyMap<ContractAddress, u8>,
         // storage the txs which received
         received_tx:LegacyMap<u256, ReceivedTx>,
         // storage the txs which created
         created_tx:LegacyMap<felt252, CreatedTx>,
+        // deployed chain name
         chain_name:felt252,
+        // the number of verified signature
         required_validators_num: u32,
+        // transaction count
         tx_count: u256
     }
 
@@ -181,6 +169,8 @@ mod ChakraSettlement {
     #[generate_trait]
     impl InternalImpl of InternalTrait {
         // validate signatures should > required_validators_num
+        // @param message_hash the perdsen hash of message 
+        // @param the signatures corresponding to each verifier
         fn check_chakra_signatures(
             self: @ContractState, message_hash: felt252, signatures: Array<(felt252, felt252, bool)>
         ){
@@ -203,12 +193,11 @@ mod ChakraSettlement {
 
     #[abi(embed_v0)]
     impl ChakraSettlementImpl of IChakraSettlement<ContractState> {
-        fn get_signature_pub_key(self: @ContractState, message_hash: felt252, r: felt252, s:felt252, y: bool) -> felt252{
-            return recover_public_key(message_hash,r,s,y).unwrap();
-        }
+        // @notice change the number of reqire validators, only manager can call this function
+        // @param new_num the number of reqire validators
         fn set_required_validators_num(ref self: ContractState, new_num: u32) -> u32 {
             let caller = get_caller_address();
-            assert(self.chakra_managers.read(caller) == 1, Errors::NOT_MANAGER);
+            assert(self.chakra_managers.read(caller) == 1, 'Caller is not a manager');
             self.required_validators_num.write(new_num);
             return self.required_validators_num.read();
         }
@@ -221,8 +210,8 @@ mod ChakraSettlement {
 
         fn add_validator(ref self: ContractState, new_validator: felt252) -> bool {
             let caller = get_caller_address();
-            assert(self.chakra_managers.read(caller) == 1, Errors::NOT_MANAGER);
-            assert(self.chakra_validators_pubkey.read(new_validator) == 0, Errors::ALREADY_VALIDATOR);
+            assert(self.chakra_managers.read(caller) == 1, 'Caller is not a manager');
+            assert(self.chakra_validators_pubkey.read(new_validator) == 0, 'Caller is a validator already');
             self.chakra_validators_pubkey.write(new_validator, 1);
             self
                 .emit(
@@ -236,8 +225,8 @@ mod ChakraSettlement {
         }
         fn remove_validator(ref self: ContractState, old_validator: felt252) -> bool {
             let caller = get_caller_address();
-            assert(self.chakra_managers.read(caller) == 1, Errors::NOT_MANAGER);
-            assert(self.chakra_validators_pubkey.read(old_validator) == 1, Errors::NOT_VALIDATOR);
+            assert(self.chakra_managers.read(caller) == 1, 'Caller is not a manager');
+            assert(self.chakra_validators_pubkey.read(old_validator) == 1, 'Caller is not a validator');
             self.chakra_validators_pubkey.write(old_validator, 0);
             self
                 .emit(
@@ -258,8 +247,8 @@ mod ChakraSettlement {
 
         fn add_manager(ref self: ContractState, new_manager: ContractAddress) -> bool {
             let caller = get_caller_address();
-            assert(self.chakra_managers.read(caller) == 1, Errors::NOT_MANAGER);
-            assert(caller != new_manager, Errors::ALREADY_MANAGER);
+            assert(self.chakra_managers.read(caller) == 1, 'Caller is not a manager');
+            assert(caller != new_manager, 'Caller is a manager already');
             self.chakra_managers.write(new_manager, 1);
             self
                 .emit(
@@ -271,7 +260,7 @@ mod ChakraSettlement {
         }
         fn remove_manager(ref self: ContractState, old_manager: ContractAddress) -> bool {
             let caller = get_caller_address();
-            assert(self.chakra_managers.read(caller) == 1, Errors::NOT_MANAGER);
+            assert(self.chakra_managers.read(caller) == 1, 'Caller is not a manager');
             self.chakra_managers.write(old_manager, 0);
             self
                 .emit(
@@ -287,6 +276,12 @@ mod ChakraSettlement {
         fn is_manager(self: @ContractState, manager: ContractAddress) -> bool {
             return self.chakra_managers.read(manager) == 1;
         }
+
+        // @notice send cross chain message, only handler can call this function
+        // @param to_chain cross message to chain
+        // @param to_handler cross message to handler
+        // @param payload_type message payload type
+        // @param payload message content
 
         fn send_cross_chain_msg(
             ref self: ContractState, to_chain: felt252, to_handler: u256, payload_type :u8,payload: Array<u8>,
@@ -319,6 +314,15 @@ mod ChakraSettlement {
             return cross_chain_settlement_id;
         }
 
+        // @notice receive cross chain message
+        // @param cross_chain_msg_id message id
+        // @param from_chain message from chain
+        // @param to_chain message to chain
+        // @param from_handler message from handler
+        // @param sign_type signature type for extension
+        // @param signatures
+        // @param payload message content
+        // @param payload_type message type
         fn receive_cross_chain_msg(
             ref self: ContractState,
             cross_chain_msg_id: u256,
@@ -379,6 +383,14 @@ mod ChakraSettlement {
             return true;
         }
 
+        // @notice receive cross chain callback
+        // @param cross_chain_msg_id message id
+        // @param from_chain message from chain
+        // @param to_chain message to chain
+        // @param from_handler message from handler
+        // @param cross_chain_msg_status message status
+        // @param sign_type signature type for extension
+        // @param signatures
         fn receive_cross_chain_callback(
             ref self: ContractState,
             cross_chain_msg_id: felt252,
@@ -423,6 +435,7 @@ mod ChakraSettlement {
         fn chain_name(self: @ContractState) -> felt252{
             return self.chain_name.read();
         }
+
     }
 
     #[abi(embed_v0)]
