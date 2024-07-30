@@ -16,9 +16,11 @@ import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 
+// This is an abstract contract that serves as a base for settlement handlers.
 abstract contract BaseSettlementHandler is OwnableUpgradeable, UUPSUpgradeable {
     using ECDSA for bytes32;
 
+    // Enumeration for tracking the status of a cross-chain transaction.
     enum CrossChainTxStatus {
         Unknow,
         Pending,
@@ -27,6 +29,7 @@ abstract contract BaseSettlementHandler is OwnableUpgradeable, UUPSUpgradeable {
         Failed
     }
 
+    // Event emitted when tokens are locked for a cross-chain transaction.
     event CrossChainLocked(
         uint256 indexed txid,
         address indexed from,
@@ -38,8 +41,11 @@ abstract contract BaseSettlementHandler is OwnableUpgradeable, UUPSUpgradeable {
         uint256 amount,
         bytes payload
     );
+
     // =============== Contracts ============================================================
+    // A flag to control whether tokens should be burned or not.
     bool public no_burn;
+
     /**
      * @dev The address of the token contract
      */
@@ -56,14 +62,21 @@ abstract contract BaseSettlementHandler is OwnableUpgradeable, UUPSUpgradeable {
     ISettlement public settlement;
 
     // =============== Storages ============================================================
+    // Mapping to store the whitelisted handler addresses for each chain.
     mapping(string => mapping(uint256 => bool)) public handler_whitelist;
+
+    // Mapping to manage nonces per address.
     mapping(address => uint256) public nonce_manager;
+
+    // Counter for generating unique cross-chain message IDs.
     uint64 public cross_chain_msg_id_counter;
+
     /**
      * @dev The chain name
      */
     string public chain;
 
+    // Event emitted when a cross-settlement message is sent.
     event SentCrossSettlementMsg(
         uint256 txid,
         string from_chain,
@@ -73,6 +86,7 @@ abstract contract BaseSettlementHandler is OwnableUpgradeable, UUPSUpgradeable {
         bytes payload
     );
 
+    // Initializes the settlement handler contract with the provided parameters.
     function _Settlement_handler_init(
         address _owner,
         bool _no_burn,
@@ -90,10 +104,12 @@ abstract contract BaseSettlementHandler is OwnableUpgradeable, UUPSUpgradeable {
         chain = _chain;
     }
 
+    // Overrides the _authorizeUpgrade function to restrict upgrades to the contract owner.
     function _authorizeUpgrade(
         address newImplementation
     ) internal override onlyOwner {}
 
+    // Checks if a given handler address is whitelisted for a specific chain.
     function is_valid_handler(
         string memory chain_name,
         uint256 handler
@@ -101,6 +117,7 @@ abstract contract BaseSettlementHandler is OwnableUpgradeable, UUPSUpgradeable {
         return handler_whitelist[chain_name][handler];
     }
 
+    // Adds a handler address to the whitelist for a specific chain.
     function add_handler(
         string memory chain_name,
         uint256 handler
@@ -108,6 +125,7 @@ abstract contract BaseSettlementHandler is OwnableUpgradeable, UUPSUpgradeable {
         handler_whitelist[chain_name][handler] = true;
     }
 
+    // Removes a handler address from the whitelist for a specific chain.
     function remove_handler(
         string memory chain_name,
         uint256 handler
