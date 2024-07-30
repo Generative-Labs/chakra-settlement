@@ -13,6 +13,7 @@ pub struct ReceivedTx {
 #[derive(Drop, Serde, starknet::Store)]
 pub struct CreatedTx {
     pub tx_id: felt252,
+    pub tx_status: u8,
     pub from_chain: felt252,
     pub to_chain: felt252,
     pub from_handler: ContractAddress,
@@ -39,12 +40,14 @@ pub trait IERC20Handler<TContractState> {
     fn receive_cross_chain_msg(ref self: TContractState, cross_chain_msg_id: u256, from_chain: felt252, to_chain: felt252,
         from_handler: u256, to_handler: ContractAddress, payload: Array<u8>) -> bool;
     fn receive_cross_chain_callback(ref self: TContractState, cross_chain_msg_id: felt252, from_chain: felt252, to_chain: felt252,
-        from_handler: ContractAddress, to_handler: u256, cross_chain_msg_status: u8) -> bool;
+        from_handler: u256, to_handler: ContractAddress, cross_chain_msg_status: u8) -> bool;
     fn cross_chain_erc20_settlement(ref self: TContractState, to_chain: felt252, to_handler: u256, to_token: u256, to: u256, amount: u256) -> felt252;
     fn is_valid_handler(self: @TContractState, chain_name: felt252, handler: u256) -> bool;
     fn set_support_handler(ref self:TContractState, chain_name: felt252, handler: u256, support: bool);
     fn set_no_burn(ref self:TContractState, no_burn: bool);
     fn no_burn(self: @TContractState)->bool;
+    fn upgrade_settlement(ref self:TContractState, new_settlement: ContractAddress);
+    fn view_settlement(self: @TContractState) -> ContractAddress;
 }
 
 #[starknet::interface]
@@ -52,7 +55,7 @@ pub trait IHandler<TContractState> {
     fn receive_cross_chain_msg(ref self: TContractState, cross_chain_msg_id: u256, from_chain: felt252, to_chain: felt252,
         from_handler: u256, to_handler: ContractAddress, payload: Array<u8>) -> bool;
     fn receive_cross_chain_callback(ref self: TContractState, cross_chain_msg_id: felt252, from_chain: felt252, to_chain: felt252,
-        from_handler: ContractAddress, to_handler: u256, cross_chain_msg_status: u8) -> bool;
+        from_handler: u256, to_handler: ContractAddress, cross_chain_msg_status: u8) -> bool;
     fn send_cross_chain_msg(ref self: TContractState, to_chain: felt252, to_handler: u256, payload: Array<u8>)-> felt252;
 }
 
@@ -91,8 +94,8 @@ pub trait IChakraSettlement<TContractState> {
         cross_chain_msg_id: felt252,
         from_chain: felt252,
         to_chain: felt252,
-        from_handler: ContractAddress,
-        to_handler: u256,
+        from_handler: u256,
+        to_handler: ContractAddress,
         cross_chain_msg_status: u8,
         sign_type: u8,
         signatures: Array<(felt252, felt252, bool)>,

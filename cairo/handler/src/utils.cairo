@@ -424,40 +424,6 @@ pub fn u256_to_u8_array(word: u256) -> Array<u8> {
     ]
 }
 
-// pub fn u256_to_u8_array(value: u256) -> Array<u8> {
-//     let mut result = ArrayTrait::<u8>::new();
-//     result.append((value & MASK_8).try_into().unwrap());
-//     result.append(((value / TWO_POW_8) & MASK_8).try_into().unwrap());
-//     result.append(((value / TWO_POW_16) & MASK_8).try_into().unwrap());
-//     result.append(((value / TWO_POW_24) & MASK_8).try_into().unwrap());
-//     result.append(((value / TWO_POW_32) & MASK_8).try_into().unwrap());
-//     result.append(((value / TWO_POW_40) & MASK_8).try_into().unwrap());
-//     result.append(((value / TWO_POW_48) & MASK_8).try_into().unwrap());
-//     result.append(((value / TWO_POW_56) & MASK_8).try_into().unwrap());
-//     result.append(((value / TWO_POW_64) & MASK_8).try_into().unwrap());
-//     result.append(((value / TWO_POW_72) & MASK_8).try_into().unwrap());
-//     result.append(((value / TWO_POW_80) & MASK_8).try_into().unwrap());
-//     result.append(((value / TWO_POW_88) & MASK_8).try_into().unwrap());
-//     result.append(((value / TWO_POW_96) & MASK_8).try_into().unwrap());
-//     result.append(((value / TWO_POW_104) & MASK_8).try_into().unwrap());
-//     result.append(((value / TWO_POW_112) & MASK_8).try_into().unwrap());
-//     result.append(((value / TWO_POW_120) & MASK_8).try_into().unwrap());
-
-//     let mut final = ArrayTrait::<u8>::new();
-//     let mut i = 0;
-//     loop{
-//         if i <= 32 - result.len() -1{
-//             final.append(0);
-//         }else if i <= 31 {
-//             final.append(* result.span().at(31-i));
-//         }else{
-//             break;
-//         }
-//         i+=1;
-//     };
-//     final
-// }
-
 fn u128_array_slice(src: @Array<u128>, mut begin: usize, end: usize) -> Array<u128> {
     let mut slice = ArrayTrait::new();
     let len = begin + end;

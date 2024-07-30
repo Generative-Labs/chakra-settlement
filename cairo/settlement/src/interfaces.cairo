@@ -13,6 +13,7 @@ pub struct ReceivedTx {
 #[derive(Drop, Serde, starknet::Store)]
 pub struct CreatedTx {
     pub tx_id: felt252,
+    pub tx_status: u8,
     pub from_chain: felt252,
     pub to_chain: felt252,
     pub from_handler: ContractAddress,
@@ -24,12 +25,13 @@ pub trait IHandler<TContractState> {
     fn receive_cross_chain_msg(ref self: TContractState, cross_chain_msg_id: u256, from_chain: felt252, to_chain: felt252,
         from_handler: u256, to_handler: ContractAddress, payload: Array<u8>) -> bool;
     fn receive_cross_chain_callback(ref self: TContractState, cross_chain_msg_id: felt252, from_chain: felt252, to_chain: felt252,
-        from_handler: ContractAddress, to_handler: u256, cross_chain_msg_status: u8) -> bool;
+        from_handler: u256, to_handler: ContractAddress, cross_chain_msg_status: u8) -> bool;
     fn send_cross_chain_msg(ref self: TContractState, to_chain: felt252, to_handler: u256, payload: Array<u8>)-> felt252;
 }
 
 #[starknet::interface]
 pub trait IChakraSettlement<TContractState> {
+
     fn add_validator(ref self: TContractState, new_validator: felt252) -> bool;
     fn remove_validator(ref self: TContractState, old_validator: felt252) -> bool;
     fn is_validator(self: @TContractState, validator: felt252) -> bool;
@@ -62,8 +64,8 @@ pub trait IChakraSettlement<TContractState> {
         cross_chain_msg_id: felt252,
         from_chain: felt252,
         to_chain: felt252,
-        from_handler: ContractAddress,
-        to_handler: u256,
+        from_handler: u256,
+        to_handler: ContractAddress,
         cross_chain_msg_status: u8,
         sign_type: u8,
         signatures: Array<(felt252, felt252, bool)>,

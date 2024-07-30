@@ -150,13 +150,13 @@ mod ERC20Handler{
         }
 
         fn receive_cross_chain_callback(ref self: ContractState, cross_chain_msg_id: felt252, from_chain: felt252, to_chain: felt252,
-        from_handler: ContractAddress, to_handler: u256, cross_chain_msg_status: u8) -> bool{
-            assert(from_handler == get_contract_address(),'error from_handler');
+        from_handler: u256, to_handler: ContractAddress, cross_chain_msg_status: u8) -> bool{
+            assert(to_handler == get_contract_address(),'error to_handler');
 
             assert(self.settlement_address.read() == get_caller_address(), 'not settlement');
 
-            assert(self.support_handler.read((from_chain, contract_address_to_u256(from_handler))) && 
-                    self.support_handler.read((to_chain, to_handler)), 'not support handler');
+            assert(self.support_handler.read((from_chain, from_handler)) && 
+                    self.support_handler.read((to_chain, contract_address_to_u256(to_handler))), 'not support handler');
 
             if !self.no_burn.read(){
                 let erc20 = IERC20MintDispatcher{contract_address: self.token_address.read()};
@@ -164,7 +164,6 @@ mod ERC20Handler{
             }
 
             let created_tx = self.created_tx.read(cross_chain_msg_id);
-            assert(created_tx.tx_id != 0, 'tx_id not exist');
             self.created_tx.write(cross_chain_msg_id, CreatedCrossChainTx{
                 tx_id: created_tx.tx_id,
                 from_chain: created_tx.from_chain,
@@ -253,6 +252,14 @@ mod ERC20Handler{
 
         fn no_burn(self: @ContractState) -> bool{
             return self.no_burn.read();
+        }
+
+        fn upgrade_settlement(ref self:ContractState, new_settlement: ContractAddress){
+            self.settlement_address.write(new_settlement);
+        }
+
+        fn view_settlement(self: @ContractState) -> ContractAddress{
+            return self.settlement_address.read();
         }
 
     }

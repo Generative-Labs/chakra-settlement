@@ -103,7 +103,6 @@ pub fn encode_message(message: Message) -> Array<u8>{
         array_u8.append(* message_id_array.span().at(i));
         i += 1;
     };
-    // let payload_type_array: Array<u8> = u256_to_u8_array(message.payload_type);
     let payload_type: u8 = message.payload_type;
     array_u8.append(payload_type);
     let mut i = 0;
