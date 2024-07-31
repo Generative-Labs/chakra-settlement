@@ -131,3 +131,7 @@ dist
 
 
 hardhat.config.local.ts
+
+# Cairo compiled artficats
+cairo/handler/target
+cairo/settlement/target
