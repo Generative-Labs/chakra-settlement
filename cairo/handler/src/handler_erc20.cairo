@@ -32,12 +32,10 @@ mod ERC20Handler{
     impl UpgradeableInternalImpl = UpgradeableComponent::InternalImpl<ContractState>;
 
     #[constructor]
-    fn constructor(ref self: ContractState, settlement_address: ContractAddress, owner: ContractAddress,
-     no_burn: bool, token_address: ContractAddress) {
+    fn constructor(ref self: ContractState, settlement_address: ContractAddress, owner: ContractAddress, token_address: ContractAddress) {
         self.settlement_address.write(settlement_address);
         self.ownable.initializer(owner);
         self.token_address.write(token_address);
-        self.no_burn.write(no_burn);
     }
 
     #[storage]
@@ -48,7 +46,6 @@ mod ERC20Handler{
         upgradeable: UpgradeableComponent::Storage,
         settlement_address: ContractAddress,
         token_address: ContractAddress,
-        no_burn: bool,
         created_tx: LegacyMap<felt252, CreatedCrossChainTx>,
         msg_count: u256,
         support_handler: LegacyMap<(felt252, u256), bool>,
@@ -90,18 +87,6 @@ mod ERC20Handler{
         pub amount: u256
     }
 
-    #[derive(Copy, Drop, PartialEq, Serde, starknet::Store)]
-    struct WithdrawTx {
-        btc_txid: u256,
-        from_chain: felt252,
-        to_chain: felt252,
-        from: ContractAddress,
-        to: u256,
-        from_handler: ContractAddress,
-        amount: u256,
-        tx_status: u8
-    }
-
     #[derive(Drop, Serde, starknet::Store)]
     pub struct CreatedCrossChainTx {
        tx_id : felt252,
@@ -140,12 +125,8 @@ mod ERC20Handler{
             let payload_transfer = message.payload;
             let transfer = decode_transfer(payload_transfer);
             assert(transfer.method_id == ERC20Method::TRANSFER, 'ERC20Method must TRANSFER');
-            
-            if !self.no_burn.read(){
-                let erc20 = IERC20MintDispatcher{contract_address: self.token_address.read()};
-                erc20.mint_to(u256_to_contract_address(transfer.to), transfer.amount);
-            }
-            
+            let erc20 = IERC20MintDispatcher{contract_address: self.token_address.read()};
+            erc20.mint_to(u256_to_contract_address(transfer.to), transfer.amount);
             return true;
         }
 
@@ -158,11 +139,9 @@ mod ERC20Handler{
             assert(self.support_handler.read((from_chain, from_handler)) && 
                     self.support_handler.read((to_chain, contract_address_to_u256(to_handler))), 'not support handler');
 
-            if !self.no_burn.read(){
-                let erc20 = IERC20MintDispatcher{contract_address: self.token_address.read()};
-                erc20.burn_from(get_contract_address(), self.created_tx.read(cross_chain_msg_id).amount);
-            }
-
+            let erc20 = IERC20MintDispatcher{contract_address: self.token_address.read()};
+            erc20.burn_from(get_contract_address(), self.created_tx.read(cross_chain_msg_id).amount);
+            
             let created_tx = self.created_tx.read(cross_chain_msg_id);
             self.created_tx.write(cross_chain_msg_id, CreatedCrossChainTx{
                 tx_id: created_tx.tx_id,
@@ -243,15 +222,6 @@ mod ERC20Handler{
         fn set_support_handler(ref self:ContractState, chain_name: felt252, handler: u256, support: bool){
             self.ownable.assert_only_owner();
             self.support_handler.write((chain_name, handler), support);
-        }
-
-        fn set_no_burn(ref self:ContractState, no_burn: bool){
-            self.ownable.assert_only_owner();
-            self.no_burn.write(no_burn);
-        }
-
-        fn no_burn(self: @ContractState) -> bool{
-            return self.no_burn.read();
         }
 
         fn upgrade_settlement(ref self:ContractState, new_settlement: ContractAddress){
