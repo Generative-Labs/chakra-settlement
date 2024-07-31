@@ -255,6 +255,7 @@ mod ERC20Handler{
         }
 
         fn upgrade_settlement(ref self:ContractState, new_settlement: ContractAddress){
+            self.ownable.assert_only_owner();
             self.settlement_address.write(new_settlement);
         }
 
