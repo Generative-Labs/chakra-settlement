@@ -39,7 +39,6 @@ abstract contract BaseSettlementTest is
     string public contract_chain_name;
 
     uint256 public required_validators;
-    // ChakraBTC internal token;
 
     ISettlementSignatureVerifier public signature_verifier;
 

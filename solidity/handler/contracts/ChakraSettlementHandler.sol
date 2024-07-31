@@ -9,11 +9,9 @@ import {ISettlementHandler} from "contracts/interfaces/ISettlementHandler.sol";
 import {AddressCast} from "contracts/libraries/AddressCast.sol";
 import {Message, PayloadType, CrossChainMsgStatus} from "contracts/libraries/Message.sol";
 import {MessageV1Codec} from "contracts/libraries/MessageV1Codec.sol";
-import {BTCV1Codec} from "contracts/libraries/BTCV1Codec.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {BaseSettlementHandler} from "contracts/BaseSettlementHandler.sol";
 import "contracts/libraries/ERC20Payload.sol";
-import "contracts/libraries/BTCPayload.sol";
 
 contract ChakraSettlementHandler is BaseSettlementHandler, ISettlementHandler {
     mapping(string => mapping(uint256 => bool)) public handler_whitelist;
@@ -22,11 +20,6 @@ contract ChakraSettlementHandler is BaseSettlementHandler, ISettlementHandler {
      * @dev The address of the codec contract
      */
     IERC20CodecV1 public codec;
-    /**
-     * @notice The DEPOSIT_ROLE indicats that only this only can be call deposit_request.
-     */
-    bytes32 public constant DEPOSIT_ROLE = keccak256("DEPOSIT_ROLE");
-    mapping(bytes32 => WithdrawTx) public withdraw_req_maps;
 
     // Enum to represent transaction status
     enum TxStatus {
@@ -35,26 +28,6 @@ contract ChakraSettlementHandler is BaseSettlementHandler, ISettlementHandler {
         Minted,
         Burned,
         Failed
-    }
-
-    // Event emitted when a withdrawal is locked
-    event WithdrawLocked(
-        bytes32 indexed withdrawTxID,
-        address indexed from,
-        string to,
-        uint256 amount
-    );
-
-    // Struct to represent a withdrawal transaction
-    struct WithdrawTx {
-        uint256 btc_txid;
-        string from_chain;
-        string to_chain;
-        address from;
-        string to;
-        address from_handler;
-        uint256 amount;
-        TxStatus status;
     }
 
     /**
@@ -103,7 +76,6 @@ contract ChakraSettlementHandler is BaseSettlementHandler, ISettlementHandler {
      * @param _codec The codec address
      * @param _verifier The verifier address
      * @param _settlement The settlement address
-     * @param _depositers Array of depositer addresses
      */
     function initialize(
         address _owner,
@@ -112,14 +84,8 @@ contract ChakraSettlementHandler is BaseSettlementHandler, ISettlementHandler {
         address _token,
         address _codec,
         address _verifier,
-        address _settlement,
-        address[] memory _depositers
+        address _settlement
     ) public initializer {
-        // Grant DEPOSIT_ROLE to all depositors
-        for (uint256 i = 0; i < _depositers.length; i++) {
-            _grantRole(DEPOSIT_ROLE, _depositers[i]);
-        }
-
         // Initialize the base settlement handler
         _Settlement_handler_init(
             _owner,
@@ -254,9 +220,7 @@ contract ChakraSettlementHandler is BaseSettlementHandler, ISettlementHandler {
     function isValidPayloadType(
         PayloadType payload_type
     ) internal pure returns (bool) {
-        return (payload_type == PayloadType.ERC20 ||
-            payload_type == PayloadType.BTCDeposit ||
-            payload_type == PayloadType.BTCWithdraw);
+        return (payload_type == PayloadType.ERC20);
     }
 
     /**
@@ -285,25 +249,6 @@ contract ChakraSettlementHandler is BaseSettlementHandler, ISettlementHandler {
         bytes calldata msg_payload = MessageV1Codec.payload(payload);
 
         require(isValidPayloadType(payload_type), "Invalid payload type");
-
-        if (payload_type == PayloadType.BTCDeposit) {
-            BTCPayloadInfo memory _info = BTCV1Codec.decode(msg_payload);
-
-            IERC20Mint(token).mint_to(
-                AddressCast.to_address(_info.addr),
-                _info.amount
-            );
-            return true;
-        }
-
-        if (payload_type == PayloadType.BTCWithdraw) {
-            BTCPayloadInfo memory _info = BTCV1Codec.decode(msg_payload);
-
-            IERC20Burn(token).burn_from(address(this), _info.amount);
-            withdraw_req_maps[_info.txid].status = TxStatus.Burned;
-
-            return true;
-        }
 
         if (payload_type == PayloadType.ERC20) {
             // Decode payload method
