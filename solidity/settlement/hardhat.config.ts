@@ -40,7 +40,7 @@ const config: HardhatUserConfig = {
       chainId: 8545,
       url: "https://rpcv1-dn-1.chakrachain.io",
       accounts: [
-        // "<AccountPrivateKey>",
+        "<AccountPrivateKey>",
       ],
     },
   },
