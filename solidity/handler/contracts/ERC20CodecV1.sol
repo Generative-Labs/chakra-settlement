@@ -6,19 +6,32 @@ import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/Own
 import "contracts/libraries/ERC20Payload.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 
+/**
+ * @title ERC20CodecV1
+ * @dev Implements encoding and decoding functions for ERC20 token operations
+ */
 contract ERC20CodecV1 is IERC20CodecV1, OwnableUpgradeable, UUPSUpgradeable {
+    /**
+     * @dev Initializes the contract
+     * @param _owner Address of the contract owner
+     */
     function initialize(address _owner) public initializer {
         __Ownable_init(_owner);
         __UUPSUpgradeable_init();
     }
 
+    /**
+     * @dev Function to authorize an upgrade
+     * @param newImplementation Address of the new implementation
+     */
     function _authorizeUpgrade(
         address newImplementation
     ) internal override onlyOwner {}
 
     /**
-     * @dev Encode transfer payload
-     * @param _payload ERC20TransferPayload
+     * @dev Encodes an ERC20 transfer payload
+     * @param _payload ERC20TransferPayload struct containing transfer details
+     * @return encodedPaylaod Encoded bytes of the transfer payload
      */
     function encode_transfer(
         ERC20TransferPayload memory _payload
@@ -34,65 +47,9 @@ contract ERC20CodecV1 is IERC20CodecV1, OwnableUpgradeable, UUPSUpgradeable {
     }
 
     /**
-     * @dev Encode approve payload
-     * @param _payload ERC20ApprovePayload
-     */
-    function encode_approve(
-        ERC20ApprovePayload memory _payload
-    ) external pure returns (bytes memory encodedPayload) {
-        encodedPayload = abi.encodePacked(
-            _payload.method_id,
-            _payload.spender,
-            _payload.amount
-        );
-    }
-
-    /**
-     * @dev Encode transfer from payload
-     * @param _payload ERC20TransferFromPayload
-     */
-    function encode_transfer_from(
-        ERC20TransferFromPayload memory _payload
-    ) external pure returns (bytes memory encodedPayload) {
-        encodedPayload = abi.encodePacked(
-            _payload.method_id,
-            _payload.from,
-            _payload.to,
-            _payload.amount
-        );
-    }
-
-    /**
-     * @dev Encode mint payload
-     * @param _payload ERC20MintPayload
-     */
-    function encode_mint(
-        ERC20MintPayload memory _payload
-    ) external pure returns (bytes memory encodedPayload) {
-        encodedPayload = abi.encodePacked(
-            _payload.method_id,
-            _payload.account,
-            _payload.amount
-        );
-    }
-
-    /**
-     * @dev Encode burn payload
-     * @param _payload ERC20BurnPayload
-     */
-    function encode_burn(
-        ERC20BurnPayload memory _payload
-    ) external pure returns (bytes memory encodedPayload) {
-        encodedPayload = abi.encodePacked(
-            _payload.method_id,
-            _payload.account,
-            _payload.amount
-        );
-    }
-
-    /**
-     * @dev Decode method id
-     * @param _payload bytes
+     * @dev Decodes the method from a payload
+     * @param _payload Encoded payload
+     * @return method The decoded ERC20Method
      */
     function decode_method(
         bytes calldata _payload
@@ -101,8 +58,9 @@ contract ERC20CodecV1 is IERC20CodecV1, OwnableUpgradeable, UUPSUpgradeable {
     }
 
     /**
-     * @dev Decode transfer payload
-     * @param _payload bytes
+     * @dev Decodes a transfer payload
+     * @param _payload Encoded transfer payload
+     * @return transferPayload Decoded ERC20TransferPayload struct
      */
     function deocde_transfer(
         bytes calldata _payload
@@ -113,58 +71,5 @@ contract ERC20CodecV1 is IERC20CodecV1, OwnableUpgradeable, UUPSUpgradeable {
         transferPayload.from_token = abi.decode(_payload[65:97], (uint256));
         transferPayload.to_token = abi.decode(_payload[97:129], (uint256));
         transferPayload.amount = abi.decode(_payload[129:161], (uint256));
-    }
-
-    /**
-     * @dev Decode approve payload
-     * @param _payload bytes
-     */
-    function decode_approve(
-        bytes calldata _payload
-    ) external pure returns (ERC20ApprovePayload memory approvePayload) {
-        approvePayload.method_id = ERC20Method(uint8(_payload[0]));
-        approvePayload.spender = abi.decode(_payload[1:33], (uint256));
-        approvePayload.amount = abi.decode(_payload[33:65], (uint256));
-    }
-
-    /**
-     * @dev Decode tranfer from payload
-     * @param _payload bytes
-     */
-    function decode_transfer_from(
-        bytes calldata _payload
-    )
-        external
-        pure
-        returns (ERC20TransferFromPayload memory transferFromPayload)
-    {
-        transferFromPayload.method_id = ERC20Method(uint8(_payload[0]));
-        transferFromPayload.from = abi.decode(_payload[1:33], (uint256));
-        transferFromPayload.to = abi.decode(_payload[33:65], (uint256));
-        transferFromPayload.amount = abi.decode(_payload[65:97], (uint256));
-    }
-
-    /**
-     * @dev Decode mint payload
-     * @param _payload bytes
-     */
-    function decode_mint(
-        bytes calldata _payload
-    ) external pure returns (ERC20MintPayload memory mintPayload) {
-        mintPayload.method_id = ERC20Method(uint8(_payload[0]));
-        mintPayload.account = abi.decode(_payload[1:33], (uint256));
-        mintPayload.amount = abi.decode(_payload[33:65], (uint256));
-    }
-
-    /**
-     * @dev Decode burn payload
-     * @param _payload bytes
-     */
-    function decode_burn(
-        bytes calldata _payload
-    ) external pure returns (ERC20BurnPayload memory burnPayload) {
-        burnPayload.method_id = ERC20Method(uint8(_payload[0]));
-        burnPayload.account = abi.decode(_payload[1:33], (uint256));
-        burnPayload.amount = abi.decode(_payload[33:65], (uint256));
     }
 }

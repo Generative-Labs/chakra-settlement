@@ -28,6 +28,7 @@ contract ChakraSettlementHandler is BaseSettlementHandler, ISettlementHandler {
     bytes32 public constant DEPOSIT_ROLE = keccak256("DEPOSIT_ROLE");
     mapping(bytes32 => WithdrawTx) public withdraw_req_maps;
 
+    // Enum to represent transaction status
     enum TxStatus {
         Unknow,
         Pending,
@@ -36,6 +37,7 @@ contract ChakraSettlementHandler is BaseSettlementHandler, ISettlementHandler {
         Failed
     }
 
+    // Event emitted when a withdrawal is locked
     event WithdrawLocked(
         bytes32 indexed withdrawTxID,
         address indexed from,
@@ -43,6 +45,7 @@ contract ChakraSettlementHandler is BaseSettlementHandler, ISettlementHandler {
         uint256 amount
     );
 
+    // Struct to represent a withdrawal transaction
     struct WithdrawTx {
         uint256 btc_txid;
         string from_chain;
@@ -54,6 +57,12 @@ contract ChakraSettlementHandler is BaseSettlementHandler, ISettlementHandler {
         TxStatus status;
     }
 
+    /**
+     * @dev Checks if a handler is valid for a given chain
+     * @param chain_name The name of the chain
+     * @param handler The handler address
+     * @return bool True if the handler is valid, false otherwise
+     */
     function is_valid_handler(
         string memory chain_name,
         uint256 handler
@@ -61,6 +70,11 @@ contract ChakraSettlementHandler is BaseSettlementHandler, ISettlementHandler {
         return handler_whitelist[chain_name][handler];
     }
 
+    /**
+     * @dev Adds a handler to the whitelist for a given chain
+     * @param chain_name The name of the chain
+     * @param handler The handler address to add
+     */
     function add_handler(
         string memory chain_name,
         uint256 handler
@@ -68,6 +82,11 @@ contract ChakraSettlementHandler is BaseSettlementHandler, ISettlementHandler {
         handler_whitelist[chain_name][handler] = true;
     }
 
+    /**
+     * @dev Removes a handler from the whitelist for a given chain
+     * @param chain_name The name of the chain
+     * @param handler The handler address to remove
+     */
     function remove_handler(
         string memory chain_name,
         uint256 handler
@@ -75,6 +94,17 @@ contract ChakraSettlementHandler is BaseSettlementHandler, ISettlementHandler {
         handler_whitelist[chain_name][handler] = false;
     }
 
+    /**
+     * @dev Initializes the contract
+     * @param _owner The owner address
+     * @param _no_burn Flag to indicate if burning is disabled
+     * @param _chain The chain name
+     * @param _token The token address
+     * @param _codec The codec address
+     * @param _verifier The verifier address
+     * @param _settlement The settlement address
+     * @param _depositers Array of depositer addresses
+     */
     function initialize(
         address _owner,
         bool _no_burn,
@@ -85,10 +115,12 @@ contract ChakraSettlementHandler is BaseSettlementHandler, ISettlementHandler {
         address _settlement,
         address[] memory _depositers
     ) public initializer {
+        // Grant DEPOSIT_ROLE to all depositors
         for (uint256 i = 0; i < _depositers.length; i++) {
             _grantRole(DEPOSIT_ROLE, _depositers[i]);
         }
 
+        // Initialize the base settlement handler
         _Settlement_handler_init(
             _owner,
             _no_burn,
@@ -100,6 +132,14 @@ contract ChakraSettlementHandler is BaseSettlementHandler, ISettlementHandler {
         codec = IERC20CodecV1(_codec);
     }
 
+    /**
+     * @dev Initiates a cross-chain ERC20 settlement
+     * @param to_chain The destination chain
+     * @param to_handler The destination handler
+     * @param to_token The destination token
+     * @param to The recipient address
+     * @param amount The amount to transfer
+     */
     function cross_chain_erc20_settlement(
         string memory to_chain,
         uint256 to_handler,
@@ -206,6 +246,11 @@ contract ChakraSettlementHandler is BaseSettlementHandler, ISettlementHandler {
         );
     }
 
+    /**
+     * @dev Checks if the payload type is valid
+     * @param payload_type The payload type to check
+     * @return bool True if valid, false otherwise
+     */
     function isValidPayloadType(
         PayloadType payload_type
     ) internal pure returns (bool) {
@@ -214,6 +259,14 @@ contract ChakraSettlementHandler is BaseSettlementHandler, ISettlementHandler {
             payload_type == PayloadType.BTCWithdraw);
     }
 
+    /**
+     * @dev Receives a cross-chain message
+     * @param from_chain The source chain
+     * @param from_handler The source handler
+     * @param payload_type The type of payload
+     * @param payload The payload data
+     * @return bool True if successful, false otherwise
+     */
     function receive_cross_chain_msg(
         uint256 /**txid */,
         string memory from_chain,
@@ -289,6 +342,14 @@ contract ChakraSettlementHandler is BaseSettlementHandler, ISettlementHandler {
         return false;
     }
 
+    /**
+     * @dev Receives a cross-chain callback
+     * @param txid The transaction ID
+     * @param from_chain The source chain
+     * @param from_handler The source handler
+     * @param status The status of the cross-chain message
+     * @return bool True if successful, false otherwise
+     */
     function receive_cross_chain_callback(
         uint256 txid,
         string memory from_chain,
@@ -322,6 +383,13 @@ contract ChakraSettlementHandler is BaseSettlementHandler, ISettlementHandler {
         return true;
     }
 
+    /**
+     * @dev Initiates a deposit request
+     * @param btc_txid The BTC transaction ID
+     * @param btc_address The BTC address
+     * @param receive_address The receiving address
+     * @param amount The amount to deposit
+     */
     function deposit_request(
         uint256 btc_txid,
         string calldata btc_address,
@@ -357,6 +425,11 @@ contract ChakraSettlementHandler is BaseSettlementHandler, ISettlementHandler {
         );
     }
 
+    /**
+     * @dev Initiates a withdrawal request
+     * @param btc_address The BTC address to withdraw to
+     * @param amount The amount to withdraw
+     */
     function withdraw_request(
         string calldata btc_address,
         uint256 amount

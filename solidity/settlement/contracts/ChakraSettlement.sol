@@ -6,10 +6,14 @@ import {ISettlementHandler} from "contracts/interfaces/ISettlementHandler.sol";
 import {ISettlementSignatureVerifier} from "contracts/interfaces/ISettlementSignatureVerifier.sol";
 import {PayloadType, CrossChainMsgStatus} from "contracts/libraries/Message.sol";
 
+// ChakraSettlement contract that inherits from BaseSettlement
 contract ChakraSettlement is BaseSettlement {
     mapping(uint256 => CreatedCrossChainTx) public create_cross_txs;
     mapping(uint256 => ReceivedCrossChainTx) public receive_cross_txs;
 
+    /**
+     * @dev Struct for created cross-chain transactions
+     */
     struct CreatedCrossChainTx {
         uint256 txid;
         string from_chain;
@@ -21,6 +25,9 @@ contract ChakraSettlement is BaseSettlement {
         CrossChainMsgStatus status;
     }
 
+    /**
+     * @dev Struct for received cross-chain transactions
+     */
     struct ReceivedCrossChainTx {
         uint256 txid;
         string from_chain;
@@ -32,7 +39,7 @@ contract ChakraSettlement is BaseSettlement {
         CrossChainMsgStatus status;
     }
 
-    // Events
+    // Events for cross-chain messages
     event CrossChainMsg(
         uint256 indexed txid,
         address indexed from_address,
@@ -66,6 +73,15 @@ contract ChakraSettlement is BaseSettlement {
         CrossChainMsgStatus status
     );
 
+    /**
+     * @dev Function to initialize the settlement
+     * @param _chain_name The name of the chain
+     * @param _chain_id The id of the chain
+     * @param _owner The owner of the contract
+     * @param _managers The managers of the contract
+     * @param _required_validators The number of required validators
+     * @param _verify_contract The verify contract
+     */
     function initialize(
         string memory _chain_name,
         uint256 _chain_id,
@@ -84,6 +100,14 @@ contract ChakraSettlement is BaseSettlement {
         );
     }
 
+    /**
+     * @dev Function to send cross-chain message
+     * @param to_chain The chain to send the message to
+     * @param from_address The address sending the message
+     * @param to_handler The handler to handle the message
+     * @param payload_type The type of the payload
+     * @param payload The payload of the message
+     */
     function send_cross_chain_msg(
         string memory to_chain,
         address from_address,
@@ -131,6 +155,18 @@ contract ChakraSettlement is BaseSettlement {
         );
     }
 
+    /**
+     * @dev Function to receive cross-chain message
+     * @param txid The transaction id
+     * @param from_chain The chain the message is from
+     * @param from_address The address the message is from
+     * @param from_handler The handler the message is from
+     * @param to_handler The handler to handle the message
+     * @param payload_type The type of the payload
+     * @param payload The payload of the message
+     * @param sign_type The type of the signature
+     * @param signatures The signatures of the message
+     */
     function receive_cross_chain_msg(
         uint256 txid,
         string memory from_chain,
@@ -207,6 +243,16 @@ contract ChakraSettlement is BaseSettlement {
         );
     }
 
+    /**
+     * @dev Function to receive cross-chain callback
+     * @param txid The transaction id
+     * @param from_chain The chain the callback is from
+     * @param from_handler The handler the callback is from
+     * @param to_handler The handler to handle the callback
+     * @param status The status of the callback
+     * @param sign_type The type of the signature
+     * @param signatures The signatures of the callback
+     */
     function receive_cross_chain_callback(
         uint256 txid,
         string memory from_chain,
