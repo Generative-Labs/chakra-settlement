@@ -100,14 +100,6 @@ mod ERC20Handler{
        tx_status: u8
     }
 
-    #[generate_trait]
-    impl InternalImpl of InternalTrait {
-        fn send_cross_chain_msg(ref self: ContractState, to_chain: felt252, to_handler: u256, payload_type: u8, payload: Array<u8>)-> felt252{
-            let settlement = IChakraSettlementDispatcher {contract_address: self.settlement_address.read()};
-            return settlement.send_cross_chain_msg(to_chain, to_handler, payload_type, payload);
-        }
-    }
-
     #[abi(embed_v0)]
     impl ERC20HandlerImpl of IERC20Handler<ContractState> {
         fn receive_cross_chain_msg(ref self: ContractState, cross_chain_msg_id: u256, from_chain: felt252, to_chain: felt252,
@@ -160,14 +152,14 @@ mod ERC20Handler{
 
         fn cross_chain_erc20_settlement(ref self: ContractState, to_chain: felt252, to_handler: u256, to_token: u256, to: u256, amount: u256) -> felt252{
             assert(self.support_handler.read((to_chain, to_handler)), 'not support handler');
-
+            let settlement = IChakraSettlementDispatcher {contract_address: self.settlement_address.read()};
+            let from_chain = settlement.chain_name();
             let token = IERC20Dispatcher{contract_address: self.token_address.read()};
-            // assert(token.allowance(get_caller_address(), get_contract_address())>= amount, 'insufficient allowance');
             token.transfer(get_contract_address(), amount);
             let tx_id = LegacyHash::hash(get_tx_info().unbox().transaction_hash, self.msg_count.read());
             let tx: CreatedCrossChainTx = CreatedCrossChainTx{
                     tx_id: tx_id,
-                    from_chain: get_tx_info().unbox().chain_id,
+                    from_chain: from_chain,
                     to_chain: to_chain,
                     from: get_contract_address(),
                     to: to,
@@ -197,7 +189,7 @@ mod ERC20Handler{
             };
             
             // send cross chain msg
-            self.send_cross_chain_msg(to_chain, to_handler, PayloadType::ERC20, encode_message(message));
+            settlement.send_cross_chain_msg(to_chain, to_handler, PayloadType::ERC20, encode_message(message));
             // emit CrossChainLocked
 
             self.emit(
