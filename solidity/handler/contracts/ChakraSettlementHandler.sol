@@ -314,7 +314,7 @@ contract ChakraSettlementHandler is BaseSettlementHandler, ISettlementHandler {
         );
 
         if (status == CrossChainMsgStatus.Success) {
-            if (no_burn) {
+            if (!no_burn) {
                 IERC20Burn(token).burn(create_cross_txs[txid].amount);
             }
 
