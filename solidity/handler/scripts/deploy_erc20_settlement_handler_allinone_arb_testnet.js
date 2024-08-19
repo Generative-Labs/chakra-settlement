@@ -5,12 +5,12 @@ const { task } = require('hardhat/config')
 
 async function main() {
     // 1. Deploy Token Contract
-    const tokenOwner = "<You token owner address>"
-    const tokenOperator = "<You token operator address>"
+    const tokenOwner = "0x1E6c3eed532d4a3937FBE178909739E60A327e19"
+    const tokenOperator = "0x1E6c3eed532d4a3937FBE178909739E60A327e19"
     const decimals = 8
     const name = "MyToken"
     const symbol = "MKT"
-    const ChakraBTC = await hre.ethers.getContractFactory("MyToken")
+    const ChakraBTC = await hre.ethers.getContractFactory("ChakraToken")
     const tokenInstance = await hre.upgrades.deployProxy(ChakraBTC, [tokenOwner, tokenOperator, name, symbol, decimals]);
     await tokenInstance.waitForDeployment();
     const tokenAddress = await tokenInstance.getAddress();
@@ -18,7 +18,7 @@ async function main() {
 
 
     // 2. Deploy Codec Contract
-    const codecOwner = "<You codec owner address>"
+    const codecOwner = "0x1E6c3eed532d4a3937FBE178909739E60A327e19"
     const ERC20CodecV1 = await hre.ethers.getContractFactory("ERC20CodecV1");
     const codecInstance = await hre.upgrades.deployProxy(ERC20CodecV1, [codecOwner]);
     await codecInstance.waitForDeployment();
@@ -26,17 +26,17 @@ async function main() {
 
 
     // 3. Deploy Verify Contract
-    const verifyOwner = "<You verify owner address>"
+    const verifyOwner = "0x1E6c3eed532d4a3937FBE178909739E60A327e19"
     const VerifyV1 = await hre.ethers.getContractFactory("SettlementSignatureVerifier");
-    const verifyInstance = await hre.upgrades.deployProxy(VerifyV1, [verifyOwner]);
+    const verifyInstance = await hre.upgrades.deployProxy(VerifyV1, [verifyOwner, 1]);
     await verifyInstance.waitForDeployment();
     console.log("Verify contract deployed to: ", await verifyInstance.getAddress())
 
     // 4. Deploy SettlementHandler Contract
     const no_burn = true;
-    const chain = "<You chain name>"
-    const settlementContractAddress = "<You settlement contract address>"
-    const settlementHandlerOwner = "<You settlement handler owner address>"
+    const chain = "Arbitrum"
+    const settlementContractAddress = "0xd56A32F635427287861Da716A442CfA7834e9463"
+    const settlementHandlerOwner = "0x1E6c3eed532d4a3937FBE178909739E60A327e19"
     const ERC20SettlementHandler = await hre.ethers.getContractFactory("ChakraSettlementHandler");
     const settlementHandlerInstance = await hre.upgrades.deployProxy(ERC20SettlementHandler, [
         settlementHandlerOwner,

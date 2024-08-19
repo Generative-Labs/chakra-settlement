@@ -99,6 +99,11 @@ pub trait IChakraSettlement<TContractState> {
         signatures: Array<(felt252, felt252, bool)>,
     ) -> bool;
 
+    fn message_hash_receive(self: @TContractState, cross_chain_msg_id: u256, from_chain: felt252, to_chain: felt252,
+        from_handler: u256, to_handler: ContractAddress, payload: Array<u8>) -> felt252;
+    fn message_hash_callback(self: @TContractState, cross_chain_msg_id: felt252, from_chain: felt252, to_chain: felt252,
+        from_handler: u256, to_handler: ContractAddress, cross_chain_msg_status: u8) -> felt252;
+
     fn get_recevied_tx(self: @TContractState, tx_id: u256) -> ReceivedTx;
 
     fn get_created_tx(self: @TContractState, tx_id: felt252) -> CreatedTx;

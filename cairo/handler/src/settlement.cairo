@@ -2,24 +2,23 @@ use starknet::ContractAddress;
 
 #[starknet::contract]
 mod ChakraSettlement {
-    use openzeppelin::access::ownable::interface::OwnableABI;
     use core::array::SpanTrait;
     use core::option::OptionTrait;
     use core::array::ArrayTrait;
     use core::traits::Into;
-    use core::ecdsa::{check_ecdsa_signature, recover_public_key};
+    use core::ecdsa::{recover_public_key};
     use core::box::BoxTrait;
+    use core::num::traits::Zero;
+    use core::hash::LegacyHash;
     use core::starknet::event::EventEmitter;
+    use starknet::ClassHash;
+    use starknet::ContractAddress;
+    use starknet::{get_caller_address, get_contract_address, get_tx_info, get_block_timestamp};
     use openzeppelin::access::ownable::OwnableComponent;
     use openzeppelin::upgrades::UpgradeableComponent;
     use openzeppelin::upgrades::interface::IUpgradeable;
-    use starknet::ClassHash;
-    use core::num::traits::Zero;
-    use starknet::ContractAddress;
-    use starknet::{get_caller_address, get_contract_address, get_tx_info, get_block_timestamp};
-    use core::hash::LegacyHash;
+    use openzeppelin::access::ownable::interface::OwnableABI;
     use settlement_cairo::interfaces::{IHandlerDispatcher, IHandlerDispatcherTrait,IChakraSettlement, ReceivedTx, CreatedTx};
-
     component!(path: OwnableComponent, storage: ownable, event: OwnableEvent);
     component!(path: UpgradeableComponent, storage: upgradeable, event: UpgradeableEvent);
 
@@ -207,7 +206,6 @@ mod ChakraSettlement {
         }
 
         // Validators related operations
-
         fn add_validator(ref self: ContractState, new_validator: felt252) -> bool {
             let caller = get_caller_address();
             assert(self.chakra_managers.read(caller) == 1, 'Caller is not a manager');
@@ -223,6 +221,7 @@ mod ChakraSettlement {
                 );
             return self.chakra_validators_pubkey.read(new_validator) == 1;
         }
+        
         fn remove_validator(ref self: ContractState, old_validator: felt252) -> bool {
             let caller = get_caller_address();
             assert(self.chakra_managers.read(caller) == 1, 'Caller is not a manager');
@@ -244,7 +243,6 @@ mod ChakraSettlement {
         }
 
         // Managers related operations
-
         fn add_manager(ref self: ContractState, new_manager: ContractAddress) -> bool {
             let caller = get_caller_address();
             assert(self.chakra_managers.read(caller) == 1, 'Caller is not a manager');
@@ -258,6 +256,7 @@ mod ChakraSettlement {
                 );
             return self.chakra_managers.read(new_manager) == 1;
         }
+
         fn remove_manager(ref self: ContractState, old_manager: ContractAddress) -> bool {
             let caller = get_caller_address();
             assert(self.chakra_managers.read(caller) == 1, 'Caller is not a manager');
@@ -282,7 +281,6 @@ mod ChakraSettlement {
         // @param to_handler cross message to handler
         // @param payload_type message payload type
         // @param payload message content
-
         fn send_cross_chain_msg(
             ref self: ContractState, to_chain: felt252, to_handler: u256, payload_type :u8,payload: Array<u8>,
         ) -> felt252 {
@@ -441,6 +439,26 @@ mod ChakraSettlement {
                 cross_chain_msg_status: state,
             });
             return true;
+        }
+
+        fn message_hash_receive(self: @ContractState, cross_chain_msg_id: u256, from_chain: felt252, to_chain: felt252, from_handler: u256, to_handler: ContractAddress, payload: Array<u8>) -> felt252{
+            let mut message_hash: felt252 = LegacyHash::hash(from_chain, (cross_chain_msg_id, to_chain, from_handler, to_handler));
+            let payload_span = payload.span();
+            let mut i = 0;
+            loop {
+                if i > payload_span.len()-1{
+                    break;
+                }
+                message_hash = LegacyHash::hash(message_hash, * payload_span.at(i));
+                i += 1;
+            };
+            return message_hash;
+        }
+
+        fn message_hash_callback(self: @ContractState, cross_chain_msg_id: felt252, from_chain: felt252, to_chain: felt252,from_handler: u256, to_handler: ContractAddress, cross_chain_msg_status: u8) -> felt252{
+            let mut message_hash_temp: felt252 = LegacyHash::hash(from_chain, (cross_chain_msg_id, to_chain, from_handler, to_handler));
+            let message_hash:felt252 = LegacyHash::hash(message_hash_temp, cross_chain_msg_status);
+            return message_hash;
         }
 
         fn get_recevied_tx(self: @ContractState, tx_id: u256) -> ReceivedTx{

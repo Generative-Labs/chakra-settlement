@@ -3,14 +3,14 @@ const { task } = require('hardhat/config')
 
 
 async function main() {
-    const settlementOwner = "0x4670555b56Af8491748EE76A22fcA80b4147dEc8"
-    const settlementMansgers = ["0x4670555b56Af8491748EE76A22fcA80b4147dEc8", "0x71933Bff1C47CC475746AFA895feA150317404Aa"]
+    const settlementOwner = "0x2d758a7D719e588C0fc17EcC557aCea37ca9a557"
+    const settlementMansgers = ["0x2d758a7D719e588C0fc17EcC557aCea37ca9a557"]
 
-    const newSettlement = await ethers.getContractFactory("Settlement"); // Replace with your new contract name
+    const newSettlement = await ethers.getContractFactory("ChakraSettlement"); // Replace with your new contract name
 
-    const chainId = 8545
-    const requiredValidators = 2
-    const chainName = "Chakra"
+    const chainId = 42161
+    const requiredValidators = 1
+    const chainName = "Arbitrum"
     const _signature_verifier = "0xA4Ba5728b519e30B5DF3D907fF843E63C25e9703";
 
     const settlmentInstance = await hre.upgrades.deployProxy(newSettlement, [
