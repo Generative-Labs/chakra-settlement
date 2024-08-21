@@ -155,7 +155,7 @@ mod ERC20Handler{
             let settlement = IChakraSettlementDispatcher {contract_address: self.settlement_address.read()};
             let from_chain = settlement.chain_name();
             let token = IERC20Dispatcher{contract_address: self.token_address.read()};
-            token.transfer(get_contract_address(), amount);
+            token.transfer_from(get_caller_address(), get_contract_address(), amount);
             let tx_id = LegacyHash::hash(get_tx_info().unbox().transaction_hash, self.msg_count.read());
             let tx: CreatedCrossChainTx = CreatedCrossChainTx{
                     tx_id: tx_id,
