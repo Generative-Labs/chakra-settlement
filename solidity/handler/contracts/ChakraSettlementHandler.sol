@@ -105,64 +105,43 @@ contract ChakraSettlementHandler is BaseSettlementHandler, ISettlementHandler {
      * @param to_token The destination token
      * @param to The recipient address
      * @param amount The amount to transfer
+     * @param mode the erc20 settlement mode
      */
     function cross_chain_erc20_settlement(
         string memory to_chain,
         uint256 to_handler,
         uint256 to_token,
         uint256 to,
-        uint256 amount
+        uint256 amount,
+        SettlementMode mode
     ) external {
         require(amount > 0, "Amount must be greater than 0");
         require(to != 0, "Invalid to address");
         require(to_handler != 0, "Invalid to handler address");
         require(to_token != 0, "Invalid to token address");
+        require(mode != SettlementMode.Unkown, "Invliad settlement mode");
 
-        require(
-            IERC20(token).balanceOf(msg.sender) >= amount,
-            "Insufficient balance"
-        );
+        ERC20Method method = ERC20Method.Unkown;
+        if (mode == SettlementMode.MintBurn) {
+            method = ERC20Method.MintBurn;
+            _erc20_burn(msg.sender, amount);
+        } else if (mode == SettlementMode.LockUnlock) {
+            method = ERC20Method.LockUnlock;
+            _erc20_lock(msg.sender, address(this), amount);
+        } else if (mode == SettlementMode.LockMint) {
+            method = ERC20Method.LockMint;
+            _erc20_lock(msg.sender, address(this), amount);
+        } else if (mode == SettlementMode.BurnUnlock) {
+            method = ERC20Method.BurnUnlock;
+            _erc20_burn(msg.sender, amount);
+        } else {
+            revert("Invliad settlement mode");
+        }
 
-        // transfer tokens
-        IERC20(token).transferFrom(msg.sender, address(this), amount);
-
-        // Increment nonce for the sender
-        nonce_manager[msg.sender] += 1;
-
-        // Create a new cross chain msg id
-        cross_chain_msg_id_counter += 1;
-        uint256 cross_chain_msg_id = uint256(
-            keccak256(
-                abi.encodePacked(
-                    cross_chain_msg_id_counter,
-                    address(this),
-                    msg.sender,
-                    nonce_manager[msg.sender]
-                )
-            )
-        );
-
-        // Create a erc20 transfer payload
-        ERC20TransferPayload memory payload = ERC20TransferPayload(
-            ERC20Method.Transfer,
-            AddressCast.to_uint256(msg.sender),
-            to,
-            AddressCast.to_uint256(token),
-            to_token,
-            amount
-        );
-
-        // Create a cross chain msg
-        Message memory cross_chain_msg = Message(
-            cross_chain_msg_id,
-            PayloadType.ERC20,
-            codec.encode_transfer(payload)
-        );
-
-        // Encode the cross chain msg
-        bytes memory cross_chain_msg_bytes = MessageV1Codec.encode(
-            cross_chain_msg
-        );
+        {
+            // Increment nonce for the sender
+            nonce_manager[msg.sender] += 1;
+        }
 
         // Create a new cross chain tx
         uint256 txid = uint256(
@@ -178,27 +157,65 @@ contract ChakraSettlementHandler is BaseSettlementHandler, ISettlementHandler {
             )
         );
 
-        // Save the cross chain tx
-        create_cross_txs[txid] = CreatedCrossChainTx(
-            txid,
-            chain,
-            to_chain,
-            msg.sender,
-            to,
-            address(this),
-            to_token,
-            amount,
-            CrossChainTxStatus.Pending
-        );
+        {
+            // Save the cross chain tx
+            create_cross_txs[txid] = CreatedCrossChainTx(
+                txid,
+                chain,
+                to_chain,
+                msg.sender,
+                to,
+                address(this),
+                to_token,
+                amount,
+                CrossChainTxStatus.Pending
+            );
+        }
 
-        // Send the cross chain msg
-        settlement.send_cross_chain_msg(
-            to_chain,
-            msg.sender,
-            to_handler,
-            PayloadType.ERC20,
-            cross_chain_msg_bytes
-        );
+        {
+            // Create a new cross chain msg id
+            cross_chain_msg_id_counter += 1;
+            uint256 cross_chain_msg_id = uint256(
+                keccak256(
+                    abi.encodePacked(
+                        cross_chain_msg_id_counter,
+                        address(this),
+                        msg.sender,
+                        nonce_manager[msg.sender]
+                    )
+                )
+            );
+            // Create a erc20 transfer payload
+            ERC20TransferPayload memory payload = ERC20TransferPayload(
+                method,
+                AddressCast.to_uint256(msg.sender),
+                to,
+                AddressCast.to_uint256(token),
+                to_token,
+                amount
+            );
+
+            // Create a cross chain msg
+            Message memory cross_chain_msg = Message(
+                cross_chain_msg_id,
+                PayloadType.ERC20,
+                codec.encode_transfer(payload)
+            );
+
+            // Encode the cross chain msg
+            bytes memory cross_chain_msg_bytes = MessageV1Codec.encode(
+                cross_chain_msg
+            );
+
+            // Send the cross chain msg
+            settlement.send_cross_chain_msg(
+                to_chain,
+                msg.sender,
+                to_handler,
+                PayloadType.ERC20,
+                cross_chain_msg_bytes
+            );
+        }
 
         emit CrossChainLocked(
             txid,
@@ -208,8 +225,54 @@ contract ChakraSettlementHandler is BaseSettlementHandler, ISettlementHandler {
             to_chain,
             address(this),
             to_token,
-            amount
+            amount,
+            mode
         );
+    }
+
+    function _erc20_mint(address account, uint256 amount) internal {
+        IERC20Burn(token).burn_from(account, amount);
+    }
+
+    function _erc20_burn(address sender, uint256 amount) internal {
+        require(
+            IERC20(token).balanceOf(sender) >= amount,
+            "Insufficient balance"
+        );
+
+        IERC20Burn(token).burn_from(sender, amount);
+    }
+
+    /**
+     * @dev Lock erc20 token
+     * @param from The lock token from account
+     * @param to The locked token to account
+     * @param amount The amount to unlock
+     */
+    function _erc20_lock(address from, address to, uint256 amount) internal {
+        require(
+            IERC20(token).balanceOf(msg.sender) >= amount,
+            "Insufficient balance"
+        );
+
+        // transfer tokens
+        IERC20(token).transferFrom(from, to, amount);
+    }
+
+    /**
+     * @dev Unlock erc20 token
+     * @param from The unlock token from account
+     * @param to The token unlocked to account
+     * @param amount The amount to unlock
+     */
+    function _erc20_unlock(address from, address to, uint256 amount) internal {
+        require(
+            IERC20(token).balanceOf(from) >= amount,
+            "Insufficient balance"
+        );
+
+        // transfer tokens
+        IERC20(token).transferFrom(from, to, amount);
     }
 
     /**
@@ -256,29 +319,35 @@ contract ChakraSettlementHandler is BaseSettlementHandler, ISettlementHandler {
 
             // Cross chain transfer
             {
-                if (method == ERC20Method.Transfer) {
-                    // Decode transfer payload
-                    ERC20TransferPayload memory transfer_payload = codec
-                        .deocde_transfer(payload);
+                // Decode transfer payload
+                ERC20TransferPayload memory transfer_payload = codec
+                    .deocde_transfer(payload);
 
-                    if (no_burn) {
-                        require(
-                            IERC20(token).balanceOf(address(this)) >=
-                                transfer_payload.amount,
-                            "Insufficient balance"
-                        );
-
-                        IERC20(token).transfer(
-                            AddressCast.to_address(transfer_payload.to),
-                            transfer_payload.amount
-                        );
-                    } else {
-                        IERC20Mint(token).mint_to(
-                            AddressCast.to_address(transfer_payload.to),
-                            transfer_payload.amount
-                        );
-                    }
-
+                if (method == ERC20Method.MintBurn) {
+                    _erc20_mint(
+                        AddressCast.to_address(transfer_payload.to),
+                        transfer_payload.amount
+                    );
+                    return true;
+                } else if (method == ERC20Method.LockUnlock) {
+                    _erc20_unlock(
+                        address(this),
+                        AddressCast.to_address(transfer_payload.to),
+                        transfer_payload.amount
+                    );
+                    return true;
+                } else if (method == ERC20Method.LockMint) {
+                    _erc20_mint(
+                        AddressCast.to_address(transfer_payload.to),
+                        transfer_payload.amount
+                    );
+                    return true;
+                } else if (method == ERC20Method.BurnUnlock) {
+                    _erc20_unlock(
+                        address(this),
+                        AddressCast.to_address(transfer_payload.to),
+                        transfer_payload.amount
+                    );
                     return true;
                 }
             }
