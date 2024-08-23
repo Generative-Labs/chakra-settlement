@@ -70,7 +70,7 @@ contract ChakraSettlementHandler is BaseSettlementHandler, ISettlementHandler {
     /**
      * @dev Initializes the contract
      * @param _owner The owner address
-     * @param _no_burn Flag to indicate if burning is disabled
+     * @param _mode mode The settlement mode
      * @param _chain The chain name
      * @param _token The token address
      * @param _codec The codec address
@@ -79,7 +79,7 @@ contract ChakraSettlementHandler is BaseSettlementHandler, ISettlementHandler {
      */
     function initialize(
         address _owner,
-        bool _no_burn,
+        SettlementMode _mode,
         string memory _chain,
         address _token,
         address _codec,
@@ -89,7 +89,7 @@ contract ChakraSettlementHandler is BaseSettlementHandler, ISettlementHandler {
         // Initialize the base settlement handler
         _Settlement_handler_init(
             _owner,
-            _no_burn,
+            _mode,
             _token,
             _verifier,
             _chain,
@@ -105,37 +105,27 @@ contract ChakraSettlementHandler is BaseSettlementHandler, ISettlementHandler {
      * @param to_token The destination token
      * @param to The recipient address
      * @param amount The amount to transfer
-     * @param mode the erc20 settlement mode
      */
     function cross_chain_erc20_settlement(
         string memory to_chain,
         uint256 to_handler,
         uint256 to_token,
         uint256 to,
-        uint256 amount,
-        SettlementMode mode
+        uint256 amount
     ) external {
         require(amount > 0, "Amount must be greater than 0");
         require(to != 0, "Invalid to address");
         require(to_handler != 0, "Invalid to handler address");
         require(to_token != 0, "Invalid to token address");
-        require(mode != SettlementMode.Unkown, "Invliad settlement mode");
 
-        ERC20Method method = ERC20Method.Unkown;
         if (mode == SettlementMode.MintBurn) {
-            method = ERC20Method.MintBurn;
-            _erc20_burn(msg.sender, amount);
+            _erc20_lock(msg.sender, address(this), amount);
         } else if (mode == SettlementMode.LockUnlock) {
-            method = ERC20Method.LockUnlock;
             _erc20_lock(msg.sender, address(this), amount);
         } else if (mode == SettlementMode.LockMint) {
-            method = ERC20Method.LockMint;
             _erc20_lock(msg.sender, address(this), amount);
         } else if (mode == SettlementMode.BurnUnlock) {
-            method = ERC20Method.BurnUnlock;
             _erc20_burn(msg.sender, amount);
-        } else {
-            revert("Invliad settlement mode");
         }
 
         {
@@ -187,7 +177,7 @@ contract ChakraSettlementHandler is BaseSettlementHandler, ISettlementHandler {
             );
             // Create a erc20 transfer payload
             ERC20TransferPayload memory payload = ERC20TransferPayload(
-                method,
+                ERC20Method.Transfer,
                 AddressCast.to_uint256(msg.sender),
                 to,
                 AddressCast.to_uint256(token),
@@ -314,35 +304,32 @@ contract ChakraSettlementHandler is BaseSettlementHandler, ISettlementHandler {
         require(isValidPayloadType(payload_type), "Invalid payload type");
 
         if (payload_type == PayloadType.ERC20) {
-            // Decode payload method
-            ERC20Method method = codec.decode_method(msg_payload);
-
             // Cross chain transfer
             {
                 // Decode transfer payload
                 ERC20TransferPayload memory transfer_payload = codec
-                    .deocde_transfer(payload);
+                    .deocde_transfer(msg_payload);
 
-                if (method == ERC20Method.MintBurn) {
+                if (mode == SettlementMode.MintBurn) {
                     _erc20_mint(
                         AddressCast.to_address(transfer_payload.to),
                         transfer_payload.amount
                     );
                     return true;
-                } else if (method == ERC20Method.LockUnlock) {
+                } else if (mode == SettlementMode.LockUnlock) {
                     _erc20_unlock(
                         address(this),
                         AddressCast.to_address(transfer_payload.to),
                         transfer_payload.amount
                     );
                     return true;
-                } else if (method == ERC20Method.LockMint) {
+                } else if (mode == SettlementMode.LockMint) {
                     _erc20_mint(
                         AddressCast.to_address(transfer_payload.to),
                         transfer_payload.amount
                     );
                     return true;
-                } else if (method == ERC20Method.BurnUnlock) {
+                } else if (mode == SettlementMode.BurnUnlock) {
                     _erc20_unlock(
                         address(this),
                         AddressCast.to_address(transfer_payload.to),
@@ -383,7 +370,7 @@ contract ChakraSettlementHandler is BaseSettlementHandler, ISettlementHandler {
         );
 
         if (status == CrossChainMsgStatus.Success) {
-            if (!no_burn) {
+            if (mode == SettlementMode.MintBurn) {
                 IERC20Burn(token).burn(create_cross_txs[txid].amount);
             }
 

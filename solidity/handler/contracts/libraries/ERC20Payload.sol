@@ -7,10 +7,11 @@ pragma solidity ^0.8.24;
  */
 enum ERC20Method {
     Unkown, // 0: Unknown method (also serves as default)
-    MintBurn, // 1: Transfer tokens from one address to another
-    LockUnlock, // 2: Approve spending of tokens (Note: there's a typo, should be "Approve")
-    LockMint, // 3: Transfer tokens on behalf of another address
-    BurnUnlock // 4: Create new tokens
+    Transfer, // 1: Transfer tokens from one address to another
+    Arppvoe, // 2: Approve spending of tokens (Note: there's a typo, should be "Approve")
+    TransferFrom, // 3: Transfer tokens on behalf of another address
+    Mint, // 4: Create new tokens
+    Burn // 5: Destroy existing tokens
 }
 
 /**

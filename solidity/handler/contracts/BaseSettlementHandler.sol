@@ -32,7 +32,6 @@ abstract contract BaseSettlementHandler is
      * @dev The settlement token mode
      */
     enum SettlementMode {
-        Unkown,
         MintBurn,
         LockMint,
         BurnUnlock,
@@ -64,7 +63,7 @@ abstract contract BaseSettlementHandler is
     }
 
     // =============== Contracts ============================================================
-    bool public no_burn;
+    SettlementMode public mode;
     /**
      * @dev The address of the token contract
      */
@@ -113,7 +112,7 @@ abstract contract BaseSettlementHandler is
 
     function _Settlement_handler_init(
         address _owner,
-        bool _no_burn,
+        SettlementMode _mode,
         address _token,
         address _verifier,
         string memory _chain,
@@ -123,7 +122,7 @@ abstract contract BaseSettlementHandler is
         __UUPSUpgradeable_init();
         settlement = ISettlement(_settlement);
         verifier = ISettlementSignatureVerifier(_verifier);
-        no_burn = _no_burn;
+        mode = _mode;
         token = _token;
         chain = _chain;
     }
