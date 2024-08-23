@@ -221,16 +221,16 @@ contract ChakraSettlementHandler is BaseSettlementHandler, ISettlementHandler {
     }
 
     function _erc20_mint(address account, uint256 amount) internal {
-        IERC20Burn(token).burn_from(account, amount);
+        IERC20Mint(token).mint_to(account, amount);
     }
 
-    function _erc20_burn(address sender, uint256 amount) internal {
+    function _erc20_burn(address account, uint256 amount) internal {
         require(
-            IERC20(token).balanceOf(sender) >= amount,
+            IERC20(token).balanceOf(account) >= amount,
             "Insufficient balance"
         );
 
-        IERC20Burn(token).burn_from(sender, amount);
+        IERC20Burn(token).burn_from(account, amount);
     }
 
     /**
