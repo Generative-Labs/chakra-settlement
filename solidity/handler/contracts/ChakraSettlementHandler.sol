@@ -240,13 +240,7 @@ contract ChakraSettlementHandler is BaseSettlementHandler, ISettlementHandler {
      * @param amount The amount to unlock
      */
     function _erc20_lock(address from, address to, uint256 amount) internal {
-        require(
-            IERC20(token).balanceOf(msg.sender) >= amount,
-            "Insufficient balance"
-        );
-
-        // transfer tokens
-        IERC20(token).transferFrom(from, to, amount);
+        _safe_transfer(from, to, amount);
     }
 
     /**
@@ -256,6 +250,10 @@ contract ChakraSettlementHandler is BaseSettlementHandler, ISettlementHandler {
      * @param amount The amount to unlock
      */
     function _erc20_unlock(address from, address to, uint256 amount) internal {
+        _safe_transfer(from, to, amount);
+    }
+
+    function _safe_transfer(address from, address to, uint256 amount) internal {
         require(
             IERC20(token).balanceOf(from) >= amount,
             "Insufficient balance"
