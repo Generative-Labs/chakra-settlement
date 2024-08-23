@@ -32,6 +32,7 @@ pub trait IERC20<TContractState> {
     fn transfer(ref self: TContractState, recipient: ContractAddress, amount: u256) -> bool;
     fn transfer_from(ref self: TContractState, from: ContractAddress, to: ContractAddress, amount: u256) -> bool;
     fn allowance(self: @TContractState, owner: ContractAddress, spender: ContractAddress) -> u256;
+    fn balance_of(self: @TContractState, address: ContractAddress) -> u256;
     fn burn(ref self: TContractState, account: ContractAddress, amount: u256);
 }
 
@@ -46,6 +47,7 @@ pub trait IERC20Handler<TContractState> {
     fn set_support_handler(ref self:TContractState, chain_name: felt252, handler: u256, support: bool);
     fn upgrade_settlement(ref self:TContractState, new_settlement: ContractAddress);
     fn view_settlement(self: @TContractState) -> ContractAddress;
+    fn mode(self: @TContractState) -> u8;
 }
 
 #[starknet::interface]

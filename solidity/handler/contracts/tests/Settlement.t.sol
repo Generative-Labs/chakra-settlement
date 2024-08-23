@@ -42,6 +42,7 @@ contract SettlementTest is BaseSettlementTest {
         string to_chain,
         address from_handler,
         uint256 to_handler,
+        PayloadType payload_type,
         bytes payload
     );
 
@@ -70,24 +71,16 @@ contract SettlementTest is BaseSettlementTest {
         string memory _chain_name,
         uint256 _chain_id,
         address _owner,
-        address[] memory _managers,
-        uint256 _required_validators,
         ISettlementSignatureVerifier _verify_contract
     ) public initializer {
-        _Settlement_init(
-            _chain_name,
-            _chain_id,
-            _owner,
-            _managers,
-            _required_validators,
-            _verify_contract
-        );
+        _Settlement_init(_chain_name, _chain_id, _owner, _verify_contract);
     }
 
     function send_cross_chain_msg(
         string memory to_chain,
         address from_address,
         uint256 to_handler,
+        PayloadType payload_type,
         bytes calldata payload
     ) external virtual {
         nonce_manager[from_address] += 1;
@@ -127,6 +120,7 @@ contract SettlementTest is BaseSettlementTest {
             to_chain,
             from_handler,
             to_handler,
+            payload_type,
             payload
         );
     }

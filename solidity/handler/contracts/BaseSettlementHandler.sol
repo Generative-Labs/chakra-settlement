@@ -28,6 +28,16 @@ abstract contract BaseSettlementHandler is
         Failed
     }
 
+    /**
+     * @dev The settlement token mode
+     */
+    enum SettlementMode {
+        MintBurn,
+        LockMint,
+        BurnUnlock,
+        LockUnlock
+    }
+
     event CrossChainLocked(
         uint256 indexed txid,
         address indexed from,
@@ -36,7 +46,8 @@ abstract contract BaseSettlementHandler is
         string to_chain,
         address from_token,
         uint256 to_token,
-        uint256 amount
+        uint256 amount,
+        SettlementMode mode
     );
 
     struct CreatedCrossChainTx {
@@ -52,7 +63,7 @@ abstract contract BaseSettlementHandler is
     }
 
     // =============== Contracts ============================================================
-    bool public no_burn;
+    SettlementMode public mode;
     /**
      * @dev The address of the token contract
      */
@@ -101,7 +112,7 @@ abstract contract BaseSettlementHandler is
 
     function _Settlement_handler_init(
         address _owner,
-        bool _no_burn,
+        SettlementMode _mode,
         address _token,
         address _verifier,
         string memory _chain,
@@ -111,11 +122,10 @@ abstract contract BaseSettlementHandler is
         __UUPSUpgradeable_init();
         settlement = ISettlement(_settlement);
         verifier = ISettlementSignatureVerifier(_verifier);
-        no_burn = _no_burn;
+        mode = _mode;
         token = _token;
         chain = _chain;
     }
-
 
     modifier onlySettlement() {
         require(msg.sender == address(settlement), "Not chakra settlement");

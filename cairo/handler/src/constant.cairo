@@ -8,6 +8,13 @@ pub mod PayloadType{
     pub const ERC721: u8 = 6;
 }
 
+pub mod SettlementMode{
+    pub const MintBurn: u8 = 0;
+    pub const LockMint: u8 = 1;
+    pub const BurnUnlock: u8 = 2;
+    pub const LockUnlock: u8 = 3;
+}
+
 pub mod TxStatus {
     pub const UNKNOW: u8 = 0;
     pub const PENDING: u8 = 1;

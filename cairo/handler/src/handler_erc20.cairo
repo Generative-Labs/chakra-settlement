@@ -18,7 +18,7 @@ mod ERC20Handler{
     use core::hash::LegacyHash;
     use settlement_cairo::codec::{decode_transfer, encode_transfer, ERC20Transfer, Message, decode_message, encode_message};
     use settlement_cairo::utils::{u256_to_contract_address, contract_address_to_u256};
-    use settlement_cairo::constant::{CrossChainTxStatus, ERC20Method, PayloadType};
+    use settlement_cairo::constant::{CrossChainTxStatus, ERC20Method, PayloadType, SettlementMode};
 
     component!(path: OwnableComponent, storage: ownable, event: OwnableEvent);
     component!(path: UpgradeableComponent, storage: upgradeable, event: UpgradeableEvent);
@@ -32,10 +32,12 @@ mod ERC20Handler{
     impl UpgradeableInternalImpl = UpgradeableComponent::InternalImpl<ContractState>;
 
     #[constructor]
-    fn constructor(ref self: ContractState, settlement_address: ContractAddress, owner: ContractAddress, token_address: ContractAddress) {
+    fn constructor(ref self: ContractState, settlement_address: ContractAddress, owner: ContractAddress, token_address: ContractAddress, mode: u8) {
+        assert(mode<=3, 'invalid mode');
         self.settlement_address.write(settlement_address);
         self.ownable.initializer(owner);
         self.token_address.write(token_address);
+        self.mode.write(mode);
     }
 
     #[storage]
@@ -49,6 +51,7 @@ mod ERC20Handler{
         created_tx: LegacyMap<felt252, CreatedCrossChainTx>,
         msg_count: u256,
         support_handler: LegacyMap<(felt252, u256), bool>,
+        mode: u8
     }
 
     #[event]
@@ -118,7 +121,17 @@ mod ERC20Handler{
             let transfer = decode_transfer(payload_transfer);
             assert(transfer.method_id == ERC20Method::TRANSFER, 'ERC20Method must TRANSFER');
             let erc20 = IERC20MintDispatcher{contract_address: self.token_address.read()};
-            erc20.mint_to(u256_to_contract_address(transfer.to), transfer.amount);
+            let token = IERC20Dispatcher{contract_address: self.token_address.read()};
+            if self.mode.read() == SettlementMode::MintBurn{
+                erc20.mint_to(u256_to_contract_address(transfer.to), transfer.amount);
+            }else if self.mode.read() == SettlementMode::LockMint{
+                erc20.mint_to(u256_to_contract_address(transfer.to), transfer.amount);
+            }else if self.mode.read() == SettlementMode::BurnUnlock{
+                token.transfer(u256_to_contract_address(transfer.to), transfer.amount);
+            }else if self.mode.read() == SettlementMode::LockUnlock{
+                token.transfer(u256_to_contract_address(transfer.to), transfer.amount);
+            }
+            
             return true;
         }
 
@@ -132,8 +145,9 @@ mod ERC20Handler{
                     self.support_handler.read((to_chain, contract_address_to_u256(to_handler))), 'not support handler');
 
             let erc20 = IERC20MintDispatcher{contract_address: self.token_address.read()};
-            erc20.burn_from(get_contract_address(), self.created_tx.read(cross_chain_msg_id).amount);
-            
+            if self.mode.read() == SettlementMode::MintBurn{
+                erc20.burn_from(get_contract_address(), self.created_tx.read(cross_chain_msg_id).amount);
+            }
             let created_tx = self.created_tx.read(cross_chain_msg_id);
             self.created_tx.write(cross_chain_msg_id, CreatedCrossChainTx{
                 tx_id: created_tx.tx_id,
@@ -155,7 +169,17 @@ mod ERC20Handler{
             let settlement = IChakraSettlementDispatcher {contract_address: self.settlement_address.read()};
             let from_chain = settlement.chain_name();
             let token = IERC20Dispatcher{contract_address: self.token_address.read()};
-            token.transfer_from(get_caller_address(), get_contract_address(), amount);
+            let token_burnable = IERC20MintDispatcher{contract_address: self.token_address.read()};
+            if self.mode.read() == SettlementMode::MintBurn{
+                token.transfer_from(get_caller_address(), get_contract_address(), amount);
+            }else if self.mode.read() == SettlementMode::LockMint{
+                token.transfer_from(get_caller_address(), get_contract_address(), amount);
+            }else if self.mode.read() == SettlementMode::BurnUnlock{
+                token_burnable.burn_from(get_caller_address(), amount);
+            }else if self.mode.read() == SettlementMode::LockUnlock{
+                token.transfer_from(get_caller_address(), get_contract_address(), amount);
+            }
+            
             let tx_id = LegacyHash::hash(get_tx_info().unbox().transaction_hash, self.msg_count.read());
             let tx: CreatedCrossChainTx = CreatedCrossChainTx{
                     tx_id: tx_id,
@@ -223,6 +247,10 @@ mod ERC20Handler{
 
         fn view_settlement(self: @ContractState) -> ContractAddress{
             return self.settlement_address.read();
+        }
+
+        fn mode(self: @ContractState) -> u8{
+            return self.mode.read();
         }
 
     }
