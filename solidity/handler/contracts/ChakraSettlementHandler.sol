@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
+import "hardhat/console.sol";
+
 import {ISettlement} from "contracts/interfaces/ISettlement.sol";
 import {IERC20CodecV1} from "contracts/interfaces/IERC20CodecV1.sol";
 import {IERC20Mint} from "contracts/interfaces/IERC20Mint.sol";
@@ -240,20 +242,23 @@ contract ChakraSettlementHandler is BaseSettlementHandler, ISettlementHandler {
      * @param amount The amount to unlock
      */
     function _erc20_lock(address from, address to, uint256 amount) internal {
-        _safe_transfer(from, to, amount);
+        _safe_transfer_from(from, to, amount);
     }
 
     /**
      * @dev Unlock erc20 token
-     * @param from The unlock token from account
      * @param to The token unlocked to account
      * @param amount The amount to unlock
      */
-    function _erc20_unlock(address from, address to, uint256 amount) internal {
-        _safe_transfer(from, to, amount);
+    function _erc20_unlock(address to, uint256 amount) internal {
+        _safe_transfer(to, amount);
     }
 
-    function _safe_transfer(address from, address to, uint256 amount) internal {
+    function _safe_transfer_from(
+        address from,
+        address to,
+        uint256 amount
+    ) internal {
         require(
             IERC20(token).balanceOf(from) >= amount,
             "Insufficient balance"
@@ -261,6 +266,16 @@ contract ChakraSettlementHandler is BaseSettlementHandler, ISettlementHandler {
 
         // transfer tokens
         IERC20(token).transferFrom(from, to, amount);
+    }
+
+    function _safe_transfer(address to, uint256 amount) internal {
+        require(
+            IERC20(token).balanceOf(address(this)) >= amount,
+            "Insufficient balance"
+        );
+
+        // transfer tokens
+        IERC20(token).transfer(to, amount);
     }
 
     /**
@@ -296,7 +311,6 @@ contract ChakraSettlementHandler is BaseSettlementHandler, ISettlementHandler {
         if (is_valid_handler(from_chain, from_handler) == false) {
             return false;
         }
-
         bytes calldata msg_payload = MessageV1Codec.payload(payload);
 
         require(isValidPayloadType(payload_type), "Invalid payload type");
@@ -316,10 +330,10 @@ contract ChakraSettlementHandler is BaseSettlementHandler, ISettlementHandler {
                     return true;
                 } else if (mode == SettlementMode.LockUnlock) {
                     _erc20_unlock(
-                        address(this),
                         AddressCast.to_address(transfer_payload.to),
                         transfer_payload.amount
                     );
+
                     return true;
                 } else if (mode == SettlementMode.LockMint) {
                     _erc20_mint(
@@ -329,7 +343,6 @@ contract ChakraSettlementHandler is BaseSettlementHandler, ISettlementHandler {
                     return true;
                 } else if (mode == SettlementMode.BurnUnlock) {
                     _erc20_unlock(
-                        address(this),
                         AddressCast.to_address(transfer_payload.to),
                         transfer_payload.amount
                     );
@@ -369,7 +382,7 @@ contract ChakraSettlementHandler is BaseSettlementHandler, ISettlementHandler {
 
         if (status == CrossChainMsgStatus.Success) {
             if (mode == SettlementMode.MintBurn) {
-                IERC20Burn(token).burn(create_cross_txs[txid].amount);
+                _erc20_burn(address(this), create_cross_txs[txid].amount);
             }
 
             create_cross_txs[txid].status = CrossChainTxStatus.Settled;

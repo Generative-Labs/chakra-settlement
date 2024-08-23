@@ -54,9 +54,6 @@ const config: HardhatUserConfig = {
       chainId: 8545,
       timeout: 200000, // 200 seconds max for running tests
       url: "https://rpcv1-dn-1.chakrachain.io",
-      accounts: [
-        "<Your Account PrivateKey>",
-      ],
       gas: "auto",
       gasPrice: "auto",
     },

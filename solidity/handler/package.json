@@ -21,7 +21,7 @@
     "@types/node": "^20.14.10",
     "chai": "^4.4.1",
     "ethers": "^6.13.1",
-    "hardhat": "^2.22.6",
+    "hardhat": "^2.22.9",
     "hardhat-contract-sizer": "^2.10.0",
     "hardhat-gas-reporter": "^1.0.8",
     "prettier": "^3.3.2",
