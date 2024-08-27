@@ -36,4 +36,25 @@ contract MessageLibTest {
 
         cross_chain_msg_bytes = MessageV1Codec.encode(cross_chain_msg);
     }
+
+    function encode_cross_chain_message_hash(
+        uint256 txid,
+        string memory from_chain,
+        uint256 from_address,
+        uint256 from_handler,
+        address to_handler,
+        bytes calldata payload
+    ) external pure returns (bytes32) {
+        return
+            keccak256(
+                abi.encodePacked(
+                    txid,
+                    from_chain,
+                    from_address,
+                    from_handler,
+                    to_handler,
+                    keccak256(payload)
+                )
+            );
+    }
 }

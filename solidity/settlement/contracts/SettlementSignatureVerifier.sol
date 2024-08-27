@@ -200,6 +200,7 @@ contract SettlementSignatureVerifier is
         );
 
         uint256 len = signatures.length;
+        // bytes32 ethMsg = MessageHashUtils.toEthSignedMessageHash(msgHash);
         uint256 m = 0;
         for (uint256 i = 0; i < len; i += 65) {
             bytes memory sig = signatures[i:i + 65];
