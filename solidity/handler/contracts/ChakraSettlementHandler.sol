@@ -135,35 +135,6 @@ contract ChakraSettlementHandler is BaseSettlementHandler, ISettlementHandler {
             nonce_manager[msg.sender] += 1;
         }
 
-        // Create a new cross chain tx
-        uint256 txid = uint256(
-            keccak256(
-                abi.encodePacked(
-                    chain,
-                    to_chain,
-                    msg.sender, // from address for settlement to calculate txid
-                    address(this), //  from handler for settlement to calculate txid
-                    to_handler,
-                    nonce_manager[msg.sender]
-                )
-            )
-        );
-
-        {
-            // Save the cross chain tx
-            create_cross_txs[txid] = CreatedCrossChainTx(
-                txid,
-                chain,
-                to_chain,
-                msg.sender,
-                to,
-                address(this),
-                to_token,
-                amount,
-                CrossChainTxStatus.Pending
-            );
-        }
-
         {
             // Create a new cross chain msg id
             cross_chain_msg_id_counter += 1;
@@ -206,6 +177,22 @@ contract ChakraSettlementHandler is BaseSettlementHandler, ISettlementHandler {
                 to_handler,
                 PayloadType.ERC20,
                 cross_chain_msg_bytes
+            );
+        }
+
+        uint256 txid = settlement.get_txid(to_chain, msg.sender, to_handler);
+        {
+            // Save the cross chain tx
+            create_cross_txs[txid] = CreatedCrossChainTx(
+                txid,
+                chain,
+                to_chain,
+                msg.sender,
+                to,
+                address(this),
+                to_token,
+                amount,
+                CrossChainTxStatus.Pending
             );
         }
 

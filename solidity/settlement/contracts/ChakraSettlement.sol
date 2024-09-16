@@ -156,6 +156,32 @@ contract ChakraSettlement is BaseSettlement {
     }
 
     /**
+     * @dev get txid for handler
+     * @param to_chain The destination chain name
+     * @param from_address The from address
+     * @param to_handler  The destination handler contract
+     */
+    function get_txid(
+        string memory to_chain,
+        address from_address,
+        uint256 to_handler
+    ) view external returns(uint256 txid) {
+            txid = uint256(
+            keccak256(
+                abi.encodePacked(
+                    contract_chain_name, // from chain
+                    to_chain,
+                    from_address, // msg.sender address
+                    msg.sender, // settlement handler address
+                    to_handler,
+                    nonce_manager[from_address]
+                )
+            )
+        );
+
+    }
+
+    /**
      * @dev Function to receive cross-chain message
      * @param txid The transaction id
      * @param from_chain The chain the message is from

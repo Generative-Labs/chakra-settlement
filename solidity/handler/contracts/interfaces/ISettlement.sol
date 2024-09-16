@@ -24,4 +24,16 @@ interface ISettlement {
         uint8 sign_type, // validators signature type /  multisig or bls sr25519
         bytes calldata signatures
     ) external;
+
+      /**
+     * @dev get txid for handler
+     * @param to_chain The destination chain name
+     * @param from_address The from address
+     * @param to_handler  The destination handler contract
+     */
+    function get_txid(
+        string memory to_chain,
+        address from_address,
+        uint256 to_handler
+    ) view external returns(uint256 txid);
 }
