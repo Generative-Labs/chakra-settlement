@@ -33,6 +33,11 @@ library AddressCast {
         bytes32 _addressBytes32,
         uint256 _size
     ) internal pure returns (bytes memory result) {
+        require(
+            uint256(_addressBytes32) <= type(uint160).max,
+            "Invalid address format"
+        );
+
         if (_size == 0 || _size > 32)
             revert AddressCast_InvalidSizeForAddress();
         result = new bytes(_size);
