@@ -53,8 +53,8 @@ library MessageV1Codec {
         return uint8(bytes1(_msg[PACKET_VERSION_OFFSET:ID_OFFSET]));
     }
 
-    function id(bytes calldata _msg) internal pure returns (uint64) {
-        return uint64(bytes8(_msg[ID_OFFSET:PAYLOAD_TYPE_OFFSET]));
+    function id(bytes calldata _msg) internal pure returns (uint256) {
+        return uint256(bytes32(_msg[ID_OFFSET:PAYLOAD_TYPE_OFFSET]));
     }
 
     function payload_type(

@@ -334,6 +334,8 @@ contract ChakraSettlementHandler is BaseSettlementHandler, ISettlementHandler {
                         transfer_payload.amount
                     );
                     return true;
+                } else {
+                    revert("Unsupported mode!");
                 }
             }
         }
