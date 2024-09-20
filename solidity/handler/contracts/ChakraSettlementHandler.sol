@@ -193,7 +193,7 @@ contract ChakraSettlementHandler is BaseSettlementHandler, ISettlementHandler {
                 to_chain,
                 msg.sender,
                 to,
-                address(this),
+                token,
                 to_token,
                 amount,
                 CrossChainTxStatus.Pending
