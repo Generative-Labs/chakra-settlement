@@ -323,12 +323,16 @@ contract ChakraSettlementHandler is BaseSettlementHandler, ISettlementHandler {
 
                     return true;
                 } else if (mode == SettlementMode.LockMint) {
-                    _erc20_mint(
+                    // src Lock token in LockMint mode
+                    // dst should Unlock token in BurnUnLock mode
+                    _erc20_unlock(
                         AddressCast.to_address(transfer_payload.to),
                         transfer_payload.amount
                     );
                     return true;
                 } else if (mode == SettlementMode.BurnUnlock) {
+                    // dst Burn token in BurnUnLock mode
+                    // src should Unlock token in LockMint mode
                     _erc20_unlock(
                         AddressCast.to_address(transfer_payload.to),
                         transfer_payload.amount
