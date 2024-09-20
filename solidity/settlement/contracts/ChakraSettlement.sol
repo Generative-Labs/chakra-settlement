@@ -237,7 +237,7 @@ contract ChakraSettlement is BaseSettlement {
             contract_chain_name,
             from_address,
             from_handler,
-            address(this),
+            to_handler,
             payload,
             CrossChainMsgStatus.Pending
         );
