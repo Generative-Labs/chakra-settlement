@@ -32,6 +32,10 @@ contract ChakraSettlementHandler is BaseSettlementHandler, ISettlementHandler {
         Failed
     }
 
+    constructor() {
+        _disableInitializers();
+    }
+
     /**
      * @dev Checks if a handler is valid for a given chain
      * @param chain_name The name of the chain

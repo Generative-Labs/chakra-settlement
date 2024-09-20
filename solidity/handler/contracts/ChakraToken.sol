@@ -15,6 +15,10 @@ contract ChakraToken is ERC20Upgradeable, TokenRoles, IERC20Mint, IERC20Burn {
     // Custom decimals for the token
     uint8 set_decimals;
 
+    constructor() {
+        _disableInitializers();
+    }
+
     /**
      * @dev Initializes the contract
      * @param _owner The address of the contract owner

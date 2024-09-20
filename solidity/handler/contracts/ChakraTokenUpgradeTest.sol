@@ -10,6 +10,10 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 contract ChakraTokenUpgrade is ERC20Upgradeable, TokenRoles {
     uint8 set_decimals;
 
+    constructor() {
+        _disableInitializers();
+    }
+
     function initialize(
         address _owner,
         address _operator,

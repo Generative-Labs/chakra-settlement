@@ -73,6 +73,10 @@ contract ChakraSettlement is BaseSettlement {
         CrossChainMsgStatus status
     );
 
+    constructor() {
+        _disableInitializers();
+    }
+
     /**
      * @dev Function to initialize the settlement
      * @param _chain_name The name of the chain
@@ -165,8 +169,8 @@ contract ChakraSettlement is BaseSettlement {
         string memory to_chain,
         address from_address,
         uint256 to_handler
-    ) view external returns(uint256 txid) {
-            txid = uint256(
+    ) external view returns (uint256 txid) {
+        txid = uint256(
             keccak256(
                 abi.encodePacked(
                     contract_chain_name, // from chain
@@ -178,7 +182,6 @@ contract ChakraSettlement is BaseSettlement {
                 )
             )
         );
-
     }
 
     /**

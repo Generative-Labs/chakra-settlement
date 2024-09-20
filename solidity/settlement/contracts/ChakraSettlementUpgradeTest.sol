@@ -66,6 +66,10 @@ contract ChakraSettlementUpgradeTest is BaseSettlement {
         CrossChainMsgStatus status
     );
 
+    constructor() {
+        _disableInitializers();
+    }
+
     function initialize(
         string memory _chain_name,
         uint256 _chain_id,

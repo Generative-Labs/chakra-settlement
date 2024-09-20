@@ -44,6 +44,10 @@ contract SettlementSignatureVerifier is
         _;
     }
 
+    constructor() {
+        _disableInitializers();
+    }
+
     function initialize(
         address _owner,
         uint256 _required_validators

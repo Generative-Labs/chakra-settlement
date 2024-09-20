@@ -11,6 +11,10 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
  * @dev Implements encoding and decoding functions for ERC20 token operations
  */
 contract ERC20CodecV1 is IERC20CodecV1, OwnableUpgradeable, UUPSUpgradeable {
+    constructor() {
+        _disableInitializers();
+    }
+
     /**
      * @dev Initializes the contract
      * @param _owner Address of the contract owner

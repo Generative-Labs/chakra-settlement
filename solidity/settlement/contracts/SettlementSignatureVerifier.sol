@@ -49,6 +49,10 @@ contract SettlementSignatureVerifier is
         _;
     }
 
+    constructor() {
+        _disableInitializers();
+    }
+
     /**
      * @dev Function to initialize the verifier
      * @notice Initializes the verifier with owner and required validators
