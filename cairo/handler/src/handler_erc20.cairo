@@ -18,14 +18,14 @@ mod ERC20Handler{
     use core::hash::LegacyHash;
     use settlement_cairo::codec::{decode_transfer, encode_transfer, ERC20Transfer, Message, decode_message, encode_message};
     use settlement_cairo::utils::{u256_to_contract_address, contract_address_to_u256};
-    use settlement_cairo::constant::{CrossChainTxStatus, ERC20Method, PayloadType, SettlementMode};
+    use settlement_cairo::constant::{CrossChainTxStatus, ERC20Method, PayloadType, SettlementMode, CrossChainMsgStatus};
 
     component!(path: OwnableComponent, storage: ownable, event: OwnableEvent);
     component!(path: UpgradeableComponent, storage: upgradeable, event: UpgradeableEvent);
 
     // Ownable Mixin
     #[abi(embed_v0)]
-    impl OwnableMixinImpl = OwnableComponent::OwnableMixinImpl<ContractState>;
+    impl OwnableTwoStepMixinImpl = OwnableComponent::OwnableTwoStepMixinImpl<ContractState>;
     impl OwnableInternalImpl = OwnableComponent::InternalImpl<ContractState>;
 
     // Upgradeable
@@ -111,8 +111,9 @@ mod ERC20Handler{
 
             assert(self.settlement_address.read() == get_caller_address(), 'not settlement');
 
-            assert(self.support_handler.read((from_chain, from_handler)) && 
-                    self.support_handler.read((to_chain, contract_address_to_u256(to_handler))), 'not support handler');
+            if !self.support_handler.read((from_chain, from_handler)){
+                return false;
+            }
 
             let message :Message= decode_message(payload);
             let payload_type = message.payload_type;
@@ -130,6 +131,8 @@ mod ERC20Handler{
                 token.transfer(u256_to_contract_address(transfer.to), transfer.amount);
             }else if self.mode.read() == SettlementMode::LockUnlock{
                 token.transfer(u256_to_contract_address(transfer.to), transfer.amount);
+            }else{
+                return false;
             }
             
             return true;
@@ -141,31 +144,54 @@ mod ERC20Handler{
 
             assert(self.settlement_address.read() == get_caller_address(), 'not settlement');
 
-            assert(self.support_handler.read((from_chain, from_handler)) && 
-                    self.support_handler.read((to_chain, contract_address_to_u256(to_handler))), 'not support handler');
+            if !self.support_handler.read((from_chain, from_handler)){
+                return false;
+            }
 
             let erc20 = IERC20MintDispatcher{contract_address: self.token_address.read()};
-            if self.mode.read() == SettlementMode::MintBurn{
-                erc20.burn_from(get_contract_address(), self.created_tx.read(cross_chain_msg_id).amount);
+            
+            if cross_chain_msg_status == CrossChainMsgStatus::SUCCESS{
+                if self.mode.read() == SettlementMode::MintBurn{
+                    erc20.burn_from(get_contract_address(), self.created_tx.read(cross_chain_msg_id).amount);
+                }
+                let created_tx = self.created_tx.read(cross_chain_msg_id);
+                self.created_tx.write(cross_chain_msg_id, CreatedCrossChainTx{
+                    tx_id: created_tx.tx_id,
+                    from_chain: created_tx.from_chain,
+                    to_chain: created_tx.to_chain,
+                    from:created_tx.from,
+                    to:created_tx.to,
+                    from_token: created_tx.from_token,
+                    to_token: created_tx.to_token,
+                    amount: created_tx.amount,
+                    tx_status: CrossChainTxStatus::SETTLED
+                });
             }
-            let created_tx = self.created_tx.read(cross_chain_msg_id);
-            self.created_tx.write(cross_chain_msg_id, CreatedCrossChainTx{
-                tx_id: created_tx.tx_id,
-                from_chain: created_tx.from_chain,
-                to_chain: created_tx.to_chain,
-                from:created_tx.from,
-                to:created_tx.to,
-                from_token: created_tx.from_token,
-                to_token: created_tx.to_token,
-                amount: created_tx.amount,
-                tx_status: CrossChainTxStatus::SETTLED
-            });
+
+            if (cross_chain_msg_status == CrossChainMsgStatus::FAILED) {
+                let created_tx = self.created_tx.read(cross_chain_msg_id);
+                self.created_tx.write(cross_chain_msg_id, CreatedCrossChainTx{
+                    tx_id: created_tx.tx_id,
+                    from_chain: created_tx.from_chain,
+                    to_chain: created_tx.to_chain,
+                    from:created_tx.from,
+                    to:created_tx.to,
+                    from_token: created_tx.from_token,
+                    to_token: created_tx.to_token,
+                    amount: created_tx.amount,
+                    tx_status: CrossChainTxStatus::FAILED
+                });
+            }
 
             return true;
         }
 
         fn cross_chain_erc20_settlement(ref self: ContractState, to_chain: felt252, to_handler: u256, to_token: u256, to: u256, amount: u256) -> felt252{
             assert(self.support_handler.read((to_chain, to_handler)), 'not support handler');
+            assert(amount > 0, 'Amount must be greater than 0');
+            assert(to != 0, 'Invalid to address');
+            assert(to_handler != 0, 'Invalid to handler address');
+            assert(to_token != 0, 'Invalid to token address');
             let settlement = IChakraSettlementDispatcher {contract_address: self.settlement_address.read()};
             let from_chain = settlement.chain_name();
             let token = IERC20Dispatcher{contract_address: self.token_address.read()};
@@ -185,7 +211,7 @@ mod ERC20Handler{
                     tx_id: tx_id,
                     from_chain: from_chain,
                     to_chain: to_chain,
-                    from: get_contract_address(),
+                    from: get_caller_address(),
                     to: to,
                     from_token: self.token_address.read(),
                     to_token: to_token,
@@ -213,7 +239,7 @@ mod ERC20Handler{
             };
             
             // send cross chain msg
-            settlement.send_cross_chain_msg(to_chain, to_handler, PayloadType::ERC20, encode_message(message));
+            settlement.send_cross_chain_msg(to_chain, to_handler, PayloadType::ERC20, encode_message(message), get_caller_address());
             // emit CrossChainLocked
 
             self.emit(
@@ -238,11 +264,6 @@ mod ERC20Handler{
         fn set_support_handler(ref self:ContractState, chain_name: felt252, handler: u256, support: bool){
             self.ownable.assert_only_owner();
             self.support_handler.write((chain_name, handler), support);
-        }
-
-        fn upgrade_settlement(ref self:ContractState, new_settlement: ContractAddress){
-            self.ownable.assert_only_owner();
-            self.settlement_address.write(new_settlement);
         }
 
         fn view_settlement(self: @ContractState) -> ContractAddress{

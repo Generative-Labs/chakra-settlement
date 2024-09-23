@@ -428,6 +428,9 @@ fn u128_array_slice(src: @Array<u128>, mut begin: usize, end: usize) -> Array<u1
     let mut slice = ArrayTrait::new();
     let len = begin + end;
     loop {
+        if begin >= end {
+            break ();
+        }
         if begin >= len {
             break ();
         }
@@ -445,6 +448,9 @@ fn u64_array_slice(src: @Array<u64>, mut begin: usize, end: usize) -> Array<u64>
     let mut slice = ArrayTrait::new();
     let len = begin + end;
     loop {
+        if begin >= end {
+            break ();
+        }
         if begin >= len {
             break ();
         }

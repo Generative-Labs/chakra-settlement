@@ -39,3 +39,10 @@ pub mod CrossChainTxStatus{
     pub const SETTLED: u8 = 3;
     pub const FAILED: u8 = 4;
 }
+
+pub mod CrossChainMsgStatus {
+    pub const UNKNOW: u8 = 0;
+    pub const PENDING: u8 = 1;
+    pub const SUCCESS: u8 = 2;
+    pub const FAILED: u8 = 3;
+}

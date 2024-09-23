@@ -2,6 +2,9 @@ use starknet::ContractAddress;
 
 #[starknet::interface]
 pub trait IckrBTC<TContractState> {
+    fn name(self: @TContractState) -> felt252;
+    fn symbol(self: @TContractState) -> felt252;
+    fn decimals(self: @TContractState) -> u8;
     fn add_manager(ref self: TContractState, new_manager: ContractAddress) -> bool;
     fn remove_manager(ref self: TContractState, old_manager: ContractAddress) -> bool;
     fn is_manager(self: @TContractState, manager: ContractAddress) -> bool;
@@ -32,7 +35,11 @@ mod ckrBTC {
 
     // ERC20 Mixin
     #[abi(embed_v0)]
-    impl ERC20MixinImpl = ERC20Component::ERC20MixinImpl<ContractState>;
+    impl ERC20Impl = ERC20Component::ERC20Impl<ContractState>;
+
+    #[abi(embed_v0)]
+    impl ERC20CamelOnlyImpl = ERC20Component::ERC20CamelOnlyImpl<ContractState>;
+
     impl ERC20InternalImpl = ERC20Component::InternalImpl<ContractState>;
 
     // Ownable Mixin
@@ -49,6 +56,8 @@ mod ckrBTC {
         pub const NOT_MANAGER: felt252 = 'address is not a manager';
         pub const ALREADY_MANAGER: felt252 = 'address is a manager already';
         pub const NOT_OPERATOR: felt252 = 'address is not a operator';
+        pub const MINT_FAILED: felt252 = 'mint failed';
+        pub const BURN_FAILED: felt252 = 'burn failed';
         pub const BALANCE_NOT_ENOUGH: felt252 = 'balance not enough';
         pub const ALREADY_OPERATOR: felt252 = 'address is a operator already';
         pub const ZERO_ADDRESS_CALLER: felt252 = 'address is the zero address';
@@ -71,11 +80,6 @@ mod ckrBTC {
     #[constructor]
     fn constructor(ref self: ContractState, owner: ContractAddress) {
         self.ownable.initializer(owner);
-
-        let name = "ckrBTC";
-        let symbol = "CBTC";
-
-        self.erc20.initializer(name, symbol);
         self.chakra_managers.write(owner, 1);
     }
 
@@ -129,30 +133,41 @@ mod ckrBTC {
 
     #[abi(embed_v0)]
     impl ckrBTCImpl of super::IckrBTC<ContractState> {
+        fn name(self: @ContractState) -> felt252 {
+            'ChakraSignetBTC'
+        }
+
+        fn symbol(self: @ContractState) -> felt252 {
+            'SBTC'
+        }
+
+        fn decimals(self: @ContractState) -> u8 {
+            8
+        }
+
         // Managers related operations
 
         fn add_manager(ref self: ContractState, new_manager: ContractAddress) -> bool {
-            let caller = get_caller_address();
-            assert(self.chakra_managers.read(caller) == 1, Errors::NOT_MANAGER);
+            self.ownable.assert_only_owner();
             assert(self.chakra_managers.read(new_manager) == 0, Errors::ALREADY_MANAGER);
 
             self.chakra_managers.write(new_manager, 1);
             self
                 .emit(
                     ManagerAdded {
-                        operator: caller, new_manager: new_manager, added_at: get_block_timestamp()
+                        operator: self.owner(), new_manager: new_manager, added_at: get_block_timestamp()
                     }
                 );
             return self.chakra_managers.read(new_manager) == 1;
         }
         fn remove_manager(ref self: ContractState, old_manager: ContractAddress) -> bool {
-            let caller = get_caller_address();
-            assert(self.chakra_managers.read(caller) == 1, Errors::NOT_MANAGER);
+            self.ownable.assert_only_owner();
+
             self.chakra_managers.write(old_manager, 0);
             self
                 .emit(
                     ManagerRemoved {
-                        operator: caller,
+                        operator: self.owner(),
                         old_manager: old_manager,
                         removed_at: get_block_timestamp()
                     }
@@ -202,7 +217,8 @@ mod ckrBTC {
             let old_balance = self.erc20.balance_of(to);
             self.erc20.mint(to, amount);
             let new_balance = self.erc20.balance_of(to);
-            return new_balance == old_balance + amount;
+            assert(new_balance == old_balance + amount, Errors::MINT_FAILED);
+            return true;
         }
 
 
@@ -213,7 +229,8 @@ mod ckrBTC {
             assert(old_balance >= amount, Errors::BALANCE_NOT_ENOUGH);
             self.erc20.burn(to, amount);
             let new_balance = self.erc20.balance_of(to);
-            return new_balance == old_balance - amount;
+            assert(new_balance == old_balance - amount, Errors:: BURN_FAILED);
+            return true;
         }
     }
 

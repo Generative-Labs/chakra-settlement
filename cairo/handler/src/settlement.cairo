@@ -2,7 +2,8 @@ use starknet::ContractAddress;
 
 #[starknet::contract]
 mod ChakraSettlement {
-    use core::array::SpanTrait;
+    use core::traits::TryInto;
+use core::array::SpanTrait;
     use core::option::OptionTrait;
     use core::array::ArrayTrait;
     use core::traits::Into;
@@ -159,10 +160,11 @@ mod ChakraSettlement {
     }
 
     #[constructor]
-    fn constructor(ref self: ContractState, owner: ContractAddress, chain_name: felt252) {
+    fn constructor(ref self: ContractState, owner: ContractAddress, chain_name: felt252, required_validators_num: u32) {
         self.ownable.initializer(owner);
         self.chakra_managers.write(owner, 1);
         self.chain_name.write(chain_name);
+        self.required_validators_num.write(required_validators_num);
     }
 
     #[generate_trait]
@@ -282,7 +284,7 @@ mod ChakraSettlement {
         // @param payload_type message payload type
         // @param payload message content
         fn send_cross_chain_msg(
-            ref self: ContractState, to_chain: felt252, to_handler: u256, payload_type :u8,payload: Array<u8>,
+            ref self: ContractState, to_chain: felt252, to_handler: u256, payload_type :u8,payload: Array<u8>, from_address: ContractAddress
         ) -> felt252 {
             let from_handler = get_caller_address();
             let from_chain = self.chain_name.read();
@@ -335,9 +337,10 @@ mod ChakraSettlement {
             payload_type: u8,
         ) -> bool {
             assert(to_chain == self.chain_name.read(), 'error to_chain');
-
+            let payload_type_felt: felt252 = payload_type.try_into().unwrap(); 
             // verify signatures
-            let mut message_hash: felt252 = LegacyHash::hash(from_chain, (cross_chain_msg_id, to_chain, from_handler, to_handler));
+            let mut message_hash_temp: felt252 = LegacyHash::hash(from_chain, (cross_chain_msg_id, to_chain, from_handler, to_handler));
+            let mut message_hash: felt252 = LegacyHash::hash(message_hash_temp, payload_type_felt);
             let payload_span = payload.span();
             let mut i = 0;
             loop {
@@ -348,6 +351,8 @@ mod ChakraSettlement {
                 i += 1;
             };
             self.check_chakra_signatures(message_hash, signatures);
+
+            assert(self.received_tx.read(cross_chain_msg_id).tx_status == CrossChainMsgStatus::UNKNOW, 'invalid tx_status');
 
             // call handler receive_cross_chain_msg
             let handler = IHandlerDispatcher{contract_address: to_handler};
@@ -415,7 +420,7 @@ mod ChakraSettlement {
             let success = handler.receive_cross_chain_callback(cross_chain_msg_id, from_chain, to_chain, from_handler, to_handler , cross_chain_msg_status);
             let mut state = CrossChainMsgStatus::PENDING;
             if success{
-                state = CrossChainMsgStatus::SUCCESS;
+                state = cross_chain_msg_status;
             }else{
                 state = CrossChainMsgStatus::FAILED;
             }

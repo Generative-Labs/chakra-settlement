@@ -45,7 +45,6 @@ pub trait IERC20Handler<TContractState> {
     fn cross_chain_erc20_settlement(ref self: TContractState, to_chain: felt252, to_handler: u256, to_token: u256, to: u256, amount: u256) -> felt252;
     fn is_valid_handler(self: @TContractState, chain_name: felt252, handler: u256) -> bool;
     fn set_support_handler(ref self:TContractState, chain_name: felt252, handler: u256, support: bool);
-    fn upgrade_settlement(ref self:TContractState, new_settlement: ContractAddress);
     fn view_settlement(self: @TContractState) -> ContractAddress;
     fn mode(self: @TContractState) -> u8;
 }
@@ -73,7 +72,7 @@ pub trait IChakraSettlement<TContractState> {
     fn view_required_validators_num(self: @TContractState) -> u32;
 
     fn send_cross_chain_msg(
-        ref self: TContractState, to_chain: felt252, to_handler: u256, payload_type :u8, payload: Array<u8>,
+        ref self: TContractState, to_chain: felt252, to_handler: u256, payload_type :u8, payload: Array<u8>, from_address: ContractAddress
     ) -> felt252;
 
     fn receive_cross_chain_msg(
