@@ -10,6 +10,7 @@ import {PayloadType, CrossChainMsgStatus} from "contracts/libraries/Message.sol"
 contract ChakraSettlement is BaseSettlement {
     mapping(uint256 => CreatedCrossChainTx) public create_cross_txs;
     mapping(uint256 => ReceivedCrossChainTx) public receive_cross_txs;
+    bool public paused;
 
     /**
      * @dev Struct for created cross-chain transactions
@@ -104,6 +105,10 @@ contract ChakraSettlement is BaseSettlement {
         );
     }
 
+    function set_pause(bool pause) external onlyOwner{
+        paused = pause;
+    }
+
     /**
      * @dev Function to send cross-chain message
      * @param to_chain The chain to send the message to
@@ -119,6 +124,7 @@ contract ChakraSettlement is BaseSettlement {
         PayloadType payload_type,
         bytes calldata payload
     ) external {
+        require(!paused, "settlement paused");
         nonce_manager[from_address] += 1;
 
         address from_handler = msg.sender;
@@ -207,6 +213,7 @@ contract ChakraSettlement is BaseSettlement {
         uint8 sign_type, // validators signature type /  multisig or bls sr25519
         bytes calldata signatures // signature array
     ) external {
+        require(!paused, "settlement paused");
         {
             // verify signature
             bytes32 message_hash = keccak256(
@@ -291,6 +298,7 @@ contract ChakraSettlement is BaseSettlement {
         uint8 sign_type,
         bytes calldata signatures
     ) external {
+        require(!paused, "settlement paused");
         verifySignature(
             txid,
             from_handler,
