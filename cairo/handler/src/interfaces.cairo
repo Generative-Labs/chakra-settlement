@@ -113,5 +113,7 @@ pub trait IChakraSettlement<TContractState> {
 
     fn chain_name(self: @TContractState) -> felt252;
 
-    
+    fn pause(ref self: TContractState, pause: bool);
+
+    fn is_paused(self: @TContractState) -> bool;
 }

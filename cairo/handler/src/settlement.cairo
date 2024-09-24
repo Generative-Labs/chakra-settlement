@@ -3,7 +3,7 @@ use starknet::ContractAddress;
 #[starknet::contract]
 mod ChakraSettlement {
     use core::traits::TryInto;
-use core::array::SpanTrait;
+    use core::array::SpanTrait;
     use core::option::OptionTrait;
     use core::array::ArrayTrait;
     use core::traits::Into;
@@ -69,7 +69,9 @@ use core::array::SpanTrait;
         // the number of verified signature
         required_validators_num: u32,
         // transaction count
-        tx_count: u256
+        tx_count: u256,
+        // pause
+        paused: bool
     }
 
     #[event]
@@ -286,6 +288,7 @@ use core::array::SpanTrait;
         fn send_cross_chain_msg(
             ref self: ContractState, to_chain: felt252, to_handler: u256, payload_type :u8,payload: Array<u8>, from_address: ContractAddress
         ) -> felt252 {
+            assert(!self.paused.read(), 'settlement paused');
             let from_handler = get_caller_address();
             let from_chain = self.chain_name.read();
             let cross_chain_settlement_id = LegacyHash::hash(get_tx_info().unbox().transaction_hash, self.tx_count.read());
@@ -336,6 +339,7 @@ use core::array::SpanTrait;
             payload: Array<u8>,
             payload_type: u8,
         ) -> bool {
+            assert(!self.paused.read(), 'settlement paused');
             assert(to_chain == self.chain_name.read(), 'error to_chain');
             let payload_type_felt: felt252 = payload_type.try_into().unwrap(); 
             // verify signatures
@@ -406,6 +410,7 @@ use core::array::SpanTrait;
             sign_type: u8,
             signatures: Array<(felt252, felt252, bool)>,
         ) -> bool {
+            assert(!self.paused.read(), 'settlement paused');
             assert(self.created_tx.read(cross_chain_msg_id).tx_id == cross_chain_msg_id, 'message id error');
             assert(self.created_tx.read(cross_chain_msg_id).from_chain == to_chain, 'from_chain error');
             assert(self.created_tx.read(cross_chain_msg_id).to_chain == from_chain, 'to_chain error');
@@ -481,6 +486,15 @@ use core::array::SpanTrait;
 
         fn chain_name(self: @ContractState) -> felt252{
             return self.chain_name.read();
+        }
+
+        fn pause(ref self: ContractState, pause: bool){
+            self.ownable.assert_only_owner();
+            self.paused.write(pause);
+        }
+
+        fn is_paused(self: @ContractState) -> bool{
+            return self.paused.read();
         }
 
     }

@@ -126,9 +126,9 @@ mod ERC20Handler{
             if self.mode.read() == SettlementMode::MintBurn{
                 erc20.mint_to(u256_to_contract_address(transfer.to), transfer.amount);
             }else if self.mode.read() == SettlementMode::LockMint{
-                erc20.mint_to(u256_to_contract_address(transfer.to), transfer.amount);
-            }else if self.mode.read() == SettlementMode::BurnUnlock{
                 token.transfer(u256_to_contract_address(transfer.to), transfer.amount);
+            }else if self.mode.read() == SettlementMode::BurnUnlock{
+                erc20.mint_to(u256_to_contract_address(transfer.to), transfer.amount);
             }else if self.mode.read() == SettlementMode::LockUnlock{
                 token.transfer(u256_to_contract_address(transfer.to), transfer.amount);
             }else{
